@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme';
 import CreditPill from './CreditPill';
 import Kicker from './Kicker';
@@ -8,11 +9,15 @@ type Props = {
   title: string;
   subtitle?: string;
   credits: number;
-  onCreditsTap?: () => void;
 };
 
-export default function BrandedTopBar({ title, subtitle, credits, onCreditsTap }: Props) {
+export default function BrandedTopBar({ title, subtitle, credits }: Props) {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<any>();
+
+  function openAccount() {
+    navigation.navigate('Account');
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -30,13 +35,9 @@ export default function BrandedTopBar({ title, subtitle, credits, onCreditsTap }
         </View>
 
         <View style={styles.right}>
-          {onCreditsTap ? (
-            <TouchableOpacity onPress={onCreditsTap} activeOpacity={0.7}>
-              <CreditPill credits={credits} />
-            </TouchableOpacity>
-          ) : (
+          <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
             <CreditPill credits={credits} />
-          )}
+          </TouchableOpacity>
         </View>
       </View>
     </View>

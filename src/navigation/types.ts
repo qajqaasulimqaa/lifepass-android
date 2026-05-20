@@ -8,24 +8,26 @@ export type AuthStackParamList = {
   SignUp: undefined;
 };
 
-export type HomeStackParamList = {
+type SharedTabRoutes = {
+  VenueDetail: { venueId: string };
+  Account: undefined;
+  BookingFlow: { venueId: string; activityId: string };
+};
+
+export type HomeStackParamList = SharedTabRoutes & {
   HomeMain: undefined;
-  VenueDetail: { venueId: string };
 };
 
-export type ExploreStackParamList = {
+export type ExploreStackParamList = SharedTabRoutes & {
   ExploreMain: undefined;
-  VenueDetail: { venueId: string };
 };
 
-export type FavouritesStackParamList = {
+export type FavouritesStackParamList = SharedTabRoutes & {
   FavouritesMain: undefined;
-  VenueDetail: { venueId: string };
 };
 
-export type BookingsStackParamList = {
+export type BookingsStackParamList = SharedTabRoutes & {
   BookingsMain: undefined;
-  VenueDetail: { venueId: string };
 };
 
 export type CheckInStackParamList = {

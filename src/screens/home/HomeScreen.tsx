@@ -45,6 +45,10 @@ export default function HomeScreen() {
     navigation.navigate('VenueDetail', { venueId });
   }
 
+  function openAccount() {
+    navigation.navigate('Account');
+  }
+
   return (
     <ScrollView
       style={styles.scroll}
@@ -69,7 +73,7 @@ export default function HomeScreen() {
         <View style={[styles.heroInner, { paddingTop: insets.top + 12 }]}>
           {/* Top bar */}
           <View style={styles.topBar}>
-            <TouchableOpacity style={styles.avatar}>
+            <TouchableOpacity style={styles.avatar} onPress={openAccount}>
               <Text style={styles.avatarInitial}>
                 {STUB_FIRST_NAME.charAt(0).toUpperCase()}
               </Text>
@@ -77,7 +81,9 @@ export default function HomeScreen() {
 
             <Kicker text="Today · Reykjavík" color={colors.paper2} />
 
-            <CreditPill credits={STUB_CREDITS} />
+            <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
+              <CreditPill credits={STUB_CREDITS} />
+            </TouchableOpacity>
           </View>
 
           {/* Editorial copy at bottom of hero */}

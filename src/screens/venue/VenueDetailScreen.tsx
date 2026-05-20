@@ -27,7 +27,10 @@ const HERO_HEIGHT = 420;
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 type Props = {
-  navigation: { goBack: () => void };
+  navigation: {
+    goBack: () => void;
+    navigate: (screen: 'BookingFlow', params: { venueId: string; activityId: string }) => void;
+  };
   route: { params: { venueId: string } };
 };
 
@@ -35,6 +38,11 @@ export default function VenueDetailScreen({ navigation, route }: Props) {
   const venue = mockVenues.find((v) => v.id === route.params.venueId);
   const insets = useSafeAreaInsets();
   const [isFavourite, setIsFavourite] = useState(false);
+
+  function openBooking(activityId: string) {
+    if (!venue) return;
+    navigation.navigate('BookingFlow', { venueId: venue.id, activityId });
+  }
 
   if (!venue) {
     return (
@@ -67,14 +75,18 @@ export default function VenueDetailScreen({ navigation, route }: Props) {
           <MetaRow venue={venue} />
           <Description text={venue.description} />
           <AmenitiesBlock amenities={venue.amenities} />
-          <ActivitiesBlock venue={venue} />
+          <ActivitiesBlock venue={venue} onBook={openBooking} />
           <OpeningHoursBlock hours={venue.openingHours} />
           <ContactBlock venue={venue} />
           <ReviewsBlock reviews={venue.reviews} />
         </View>
       </ScrollView>
 
-      <FloatingAction venue={venue} bottom={insets.bottom + 110} />
+      <FloatingAction
+        venue={venue}
+        bottom={insets.bottom + 110}
+        onBook={() => venue.activities[0] && openBooking(venue.activities[0].id)}
+      />
     </View>
   );
 }
@@ -194,7 +206,7 @@ function AmenitiesBlock({ amenities }: { amenities: string[] }) {
   );
 }
 
-function ActivitiesBlock({ venue }: { venue: Venue }) {
+function ActivitiesBlock({ venue, onBook }: { venue: Venue; onBook: (id: string) => void }) {
   if (venue.walkInsAllowed) return <WalkInCard venue={venue} />;
   if (venue.activities.length === 0) return <NoBookingsCard venue={venue} />;
 
@@ -203,17 +215,17 @@ function ActivitiesBlock({ venue }: { venue: Venue }) {
       <SectionTitle title="Book a class" kicker={`${venue.activities.length} classes`} />
       <View style={styles.activitiesList}>
         {venue.activities.map((activity) => (
-          <ActivityRow key={activity.id} activity={activity} />
+          <ActivityRow key={activity.id} activity={activity} onPress={() => onBook(activity.id)} />
         ))}
       </View>
     </View>
   );
 }
 
-function ActivityRow({ activity }: { activity: Activity }) {
+function ActivityRow({ activity, onPress }: { activity: Activity; onPress: () => void }) {
   const isLuxury = activity.classification === 'luxury';
   return (
-    <TouchableOpacity style={activityStyles.row} activeOpacity={0.7}>
+    <TouchableOpacity style={activityStyles.row} activeOpacity={0.7} onPress={onPress}>
       <Image source={{ uri: activity.imageUrl }} style={activityStyles.image} />
       <View style={activityStyles.info}>
         <Text style={activityStyles.name} numberOfLines={2}>{activity.name}</Text>
@@ -396,7 +408,15 @@ function ReviewCard({ review }: { review: VenueReview }) {
   );
 }
 
-function FloatingAction({ venue, bottom }: { venue: Venue; bottom: number }) {
+function FloatingAction({
+  venue,
+  bottom,
+  onBook,
+}: {
+  venue: Venue;
+  bottom: number;
+  onBook: () => void;
+}) {
   if (venue.walkInsAllowed) {
     return (
       <View style={[floatStyles.container, { bottom }]}>
@@ -422,7 +442,7 @@ function FloatingAction({ venue, bottom }: { venue: Venue; bottom: number }) {
               {first.name} · {first.durationMinutes} min
             </Text>
           </View>
-          <TouchableOpacity style={floatStyles.bookButton} activeOpacity={0.85}>
+          <TouchableOpacity style={floatStyles.bookButton} activeOpacity={0.85} onPress={onBook}>
             <Text style={floatStyles.bookButtonText}>Book · {first.creditCost} cr</Text>
           </TouchableOpacity>
         </View>
