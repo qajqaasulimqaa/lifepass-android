@@ -1,17 +1,33 @@
 import { useState, useMemo } from 'react';
-import { View, Text, ScrollView, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  Image,
+  TouchableOpacity,
+  StyleSheet,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { mockBookings } from '../../data/mockBookings';
+import { mockVenues } from '../../data/mockVenues';
+import { mockFavouriteVenueIds, mockFavouriteActivities } from '../../data/mockFavourites';
+import { mockSubscription } from '../../data/mockAccount';
 import BrandedTopBar from '../../components/BrandedTopBar';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import EmptyState from '../../components/EmptyState';
 import type { Booking } from '../../types/booking';
+import type { Venue } from '../../types/venue';
+import type { BookingsStackParamList } from '../../navigation/types';
 
-type Segment = 'upcoming' | 'past';
+type TopTab = 'bookings' | 'saved';
+type BookingsSubTab = 'upcoming' | 'past';
 
-const STUB_CREDITS = 12;
+type Nav = NativeStackNavigationProp<BookingsStackParamList>;
 
 function whenString(date: Date): string {
   const now = new Date();
@@ -20,99 +36,77 @@ function whenString(date: Date): string {
   const target = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
   const days = Math.round((target - today) / dayMs);
   const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-
   if (days === 0) return `Today · ${time}`;
   if (days === 1) return `Tomorrow · ${time}`;
   if (days === -1) return `Yesterday · ${time}`;
-
   const weekday = date.toLocaleDateString([], { weekday: 'short' });
   const day = date.getDate();
   return `${weekday} ${day} · ${time}`;
 }
 
 export default function BookingsScreen() {
-  const [segment, setSegment] = useState<Segment>('upcoming');
+  const navigation = useNavigation<Nav>();
+  const [topTab, setTopTab] = useState<TopTab>('bookings');
+  const [subTab, setSubTab] = useState<BookingsSubTab>('upcoming');
+
+  const openVenue = (venueId: string) => navigation.navigate('VenueDetail', { venueId });
 
   const { upcoming, past } = useMemo(() => {
     const now = new Date();
-    const upcoming = mockBookings.filter(
-      (b) => b.status === 'confirmed' && b.bookingTime > now
-    );
-    const past = mockBookings.filter(
-      (b) => b.status !== 'confirmed' || b.bookingTime <= now
-    );
-    return { upcoming, past };
+    return {
+      upcoming: mockBookings.filter((b) => b.status === 'confirmed' && b.bookingTime > now),
+      past: mockBookings.filter((b) => b.status !== 'confirmed' || b.bookingTime <= now),
+    };
   }, []);
 
-  const list = segment === 'upcoming' ? upcoming : past;
+  const savedVenues = mockVenues.filter((v) => mockFavouriteVenueIds.includes(v.id));
+  const savedActivities = mockFavouriteActivities;
+  const suggestions = mockVenues.filter((v) => !mockFavouriteVenueIds.includes(v.id)).slice(0, 3);
 
   return (
     <View style={styles.container}>
-      <BrandedTopBar title="Bookings" subtitle="Past & upcoming" credits={STUB_CREDITS} />
+      <BrandedTopBar
+        title="Library"
+        subtitle="Bookings & saved"
+        credits={mockSubscription.totalCredits}
+      />
 
-      {/* Segmented tabs */}
-      <View style={styles.segmentBar}>
-        <SegmentButton
-          title="Upcoming"
-          count={upcoming.length}
-          active={segment === 'upcoming'}
-          onPress={() => setSegment('upcoming')}
+      {/* Top tabs */}
+      <View style={styles.topTabs}>
+        <TopTabButton
+          title="Bookings"
+          count={upcoming.length + past.length}
+          active={topTab === 'bookings'}
+          onPress={() => setTopTab('bookings')}
         />
-        <SegmentButton
-          title="Past"
-          count={past.length}
-          active={segment === 'past'}
-          onPress={() => setSegment('past')}
+        <TopTabButton
+          title="Saved"
+          count={savedVenues.length + savedActivities.length}
+          active={topTab === 'saved'}
+          onPress={() => setTopTab('saved')}
         />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Spa booking CTA */}
-        <TouchableOpacity style={styles.spaCta} activeOpacity={0.7}>
-          <View style={styles.spaIcon}>
-            <Ionicons name="water-outline" size={14} color={colors.blueMid} />
-          </View>
-          <View style={styles.spaText}>
-            <Text style={styles.spaTitle}>Book a lagoon</Text>
-            <Text style={styles.spaSub} numberOfLines={1}>
-              Forest Lagoon, Vök Baths
-            </Text>
-          </View>
-          <Ionicons name="chevron-forward" size={11} color={colors.paper3} />
-        </TouchableOpacity>
-
-        {/* List */}
-        {list.length === 0 ? (
-          <EmptyState
-            icon={segment === 'upcoming' ? 'calendar-outline' : 'time-outline'}
-            message={
-              segment === 'upcoming'
-                ? 'No upcoming bookings.\nExplore venues to find your next class.'
-                : 'Your past bookings will show up here.'
-            }
-          />
-        ) : segment === 'upcoming' ? (
-          <View style={styles.list}>
-            {list.map((booking) => (
-              <UpcomingCard key={booking.id} booking={booking} />
-            ))}
-          </View>
-        ) : (
-          <View>
-            {list.map((booking, idx) => (
-              <View key={booking.id}>
-                <PastRow booking={booking} />
-                {idx < list.length - 1 && <View style={styles.divider} />}
-              </View>
-            ))}
-          </View>
-        )}
-      </ScrollView>
+      {topTab === 'bookings' ? (
+        <BookingsTab
+          subTab={subTab}
+          onSubTab={setSubTab}
+          upcoming={upcoming}
+          past={past}
+        />
+      ) : (
+        <SavedTab
+          savedVenues={savedVenues}
+          savedActivities={savedActivities}
+          suggestions={suggestions}
+          openVenue={openVenue}
+        />
+      )}
     </View>
   );
 }
 
-function SegmentButton({
+function TopTabButton({
   title,
   count,
   active,
@@ -124,12 +118,182 @@ function SegmentButton({
   onPress: () => void;
 }) {
   return (
-    <TouchableOpacity style={styles.segmentButton} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.segmentLabelRow}>
-        <Text style={[styles.segmentTitle, active && styles.segmentTitleActive]}>{title}</Text>
-        <Text style={styles.segmentCount}>{count}</Text>
+    <TouchableOpacity style={styles.topTab} onPress={onPress} activeOpacity={0.7}>
+      <View style={styles.topTabLabelRow}>
+        <Text style={[styles.topTabTitle, active && styles.topTabTitleActive]}>{title}</Text>
+        <Text style={styles.topTabCount}>{count}</Text>
       </View>
-      <View style={[styles.segmentUnderline, active && styles.segmentUnderlineActive]} />
+      <View style={[styles.topTabUnderline, active && styles.topTabUnderlineActive]} />
+    </TouchableOpacity>
+  );
+}
+
+function BookingsTab({
+  subTab,
+  onSubTab,
+  upcoming,
+  past,
+}: {
+  subTab: BookingsSubTab;
+  onSubTab: (t: BookingsSubTab) => void;
+  upcoming: Booking[];
+  past: Booking[];
+}) {
+  const list = subTab === 'upcoming' ? upcoming : past;
+
+  return (
+    <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+      <View style={styles.subTabRow}>
+        <SubTabChip
+          title="Upcoming"
+          count={upcoming.length}
+          active={subTab === 'upcoming'}
+          onPress={() => onSubTab('upcoming')}
+        />
+        <SubTabChip
+          title="Past"
+          count={past.length}
+          active={subTab === 'past'}
+          onPress={() => onSubTab('past')}
+        />
+      </View>
+
+      <TouchableOpacity style={styles.spaCta} activeOpacity={0.7}>
+        <View style={styles.spaIcon}>
+          <Ionicons name="water-outline" size={14} color={colors.blueMid} />
+        </View>
+        <View style={styles.spaText}>
+          <Text style={styles.spaTitle}>Book a lagoon</Text>
+          <Text style={styles.spaSub} numberOfLines={1}>Forest Lagoon, Vök Baths</Text>
+        </View>
+        <Ionicons name="chevron-forward" size={11} color={colors.paper3} />
+      </TouchableOpacity>
+
+      {list.length === 0 ? (
+        <EmptyState
+          icon={subTab === 'upcoming' ? 'calendar-outline' : 'time-outline'}
+          message={
+            subTab === 'upcoming'
+              ? 'No upcoming bookings.\nExplore venues to find your next class.'
+              : 'Your past bookings will show up here.'
+          }
+        />
+      ) : subTab === 'upcoming' ? (
+        <View style={styles.list}>
+          {list.map((b) => (
+            <UpcomingCard key={b.id} booking={b} />
+          ))}
+        </View>
+      ) : (
+        <View>
+          {list.map((b, idx) => (
+            <View key={b.id}>
+              <PastRow booking={b} />
+              {idx < list.length - 1 && <View style={styles.divider} />}
+            </View>
+          ))}
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function SavedTab({
+  savedVenues,
+  savedActivities,
+  suggestions,
+  openVenue,
+}: {
+  savedVenues: Venue[];
+  savedActivities: typeof mockFavouriteActivities;
+  suggestions: Venue[];
+  openVenue: (venueId: string) => void;
+}) {
+  return (
+    <ScrollView contentContainerStyle={styles.scrollSaved} showsVerticalScrollIndicator={false}>
+      <View style={styles.savedHeader}>
+        <Text style={styles.savedHeading}>Your spots</Text>
+        <Kicker text={`${savedVenues.length} saved`} color={colors.paper3} />
+      </View>
+
+      {savedVenues.length === 0 ? (
+        <EmptyState icon="heart-outline" message="No saved venues yet." actionLabel="Find venues" onAction={() => {}} />
+      ) : (
+        <View style={styles.list}>
+          {savedVenues.map((v) => (
+            <TouchableOpacity key={v.id} activeOpacity={0.85} onPress={() => openVenue(v.id)}>
+              <SavedVenueRow venue={v} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {savedActivities.length > 0 && (
+        <View style={styles.section}>
+          <Kicker text="Saved classes" color={colors.paper3} />
+          <View style={styles.list}>
+            {savedActivities.map((a) => (
+              <View key={a.id} style={activityRowStyles.row}>
+                <Image source={{ uri: a.imageUrl }} style={activityRowStyles.image} />
+                <View style={activityRowStyles.info}>
+                  <Text style={activityRowStyles.name}>{a.name}</Text>
+                  <Text style={activityRowStyles.credits}>
+                    {a.creditCost} credit{a.creditCost === 1 ? '' : 's'}
+                  </Text>
+                </View>
+                <Ionicons name="heart" size={14} color={colors.blueMid} />
+                <Ionicons name="chevron-forward" size={12} color={colors.paper3} />
+              </View>
+            ))}
+          </View>
+        </View>
+      )}
+
+      {suggestions.length > 0 && (
+        <View style={suggestStyles.container}>
+          <LinearGradient
+            colors={[colors.ink2, colors.ink3]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={suggestStyles.headerRow}>
+            <Ionicons name="sparkles" size={12} color={colors.skyBlue} />
+            <Kicker text="For you" color={colors.skyBlue} />
+          </View>
+          <Text style={suggestStyles.heading}>Based on your saved spots</Text>
+          <View style={suggestStyles.list}>
+            {suggestions.map((venue) => (
+              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                <SuggestionRow venue={venue} />
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+      )}
+    </ScrollView>
+  );
+}
+
+function SubTabChip({
+  title,
+  count,
+  active,
+  onPress,
+}: {
+  title: string;
+  count: number;
+  active: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.subChip, active && styles.subChipActive]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Text style={[styles.subChipText, active && styles.subChipTextActive]}>{title}</Text>
+      <Text style={[styles.subChipCount, active && styles.subChipTextActive]}>{count}</Text>
     </TouchableOpacity>
   );
 }
@@ -179,9 +343,47 @@ function PastRow({ booking }: { booking: Booking }) {
           {booking.activityName} · {whenString(booking.bookingTime)}
         </Text>
       </View>
-      <View style={pastStyles.creditCol}>
-        <Text style={pastStyles.cost}>−{booking.creditCost} cr</Text>
+      <Text style={pastStyles.cost}>−{booking.creditCost} cr</Text>
+    </View>
+  );
+}
+
+function SavedVenueRow({ venue }: { venue: Venue }) {
+  return (
+    <View style={rowStyles.row}>
+      <Image source={{ uri: venue.imageUrl }} style={rowStyles.image} />
+      <View style={rowStyles.info}>
+        <Text style={rowStyles.name}>{venue.name}</Text>
+        <Text style={rowStyles.city}>
+          {venue.city} · {venue.walkInsAllowed ? 'Walk-ins welcome' : 'Pre-book required'}
+        </Text>
+        <View style={rowStyles.savedRow}>
+          <Ionicons name="heart" size={10} color={colors.blueMid} />
+          <Text style={rowStyles.savedText}>Saved</Text>
+        </View>
       </View>
+      <CreditPill credits={venue.creditCost} compact />
+    </View>
+  );
+}
+
+function SuggestionRow({ venue }: { venue: Venue }) {
+  const reason =
+    venue.classification === 'luxury'
+      ? 'Similar to your lagoons'
+      : venue.category[0]
+        ? `You liked ${venue.category[0]}`
+        : 'Near your saved spots';
+  return (
+    <View style={suggestStyles.row}>
+      <Image source={{ uri: venue.imageUrl }} style={suggestStyles.image} />
+      <View style={suggestStyles.rowInfo}>
+        <Text style={suggestStyles.rowName}>{venue.name}</Text>
+        <Text style={suggestStyles.rowReason} numberOfLines={1}>{reason}</Text>
+      </View>
+      <TouchableOpacity style={suggestStyles.addButton}>
+        <Ionicons name="heart-outline" size={12} color={colors.paper} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -189,7 +391,7 @@ function PastRow({ booking }: { booking: Booking }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
 
-  segmentBar: {
+  topTabs: {
     flexDirection: 'row',
     gap: 24,
     paddingHorizontal: 20,
@@ -197,15 +399,43 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0.5,
     borderBottomColor: colors.line,
   },
-  segmentButton: { alignItems: 'flex-start' },
-  segmentLabelRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingBottom: 12 },
-  segmentTitle: { fontSize: 14, fontWeight: '600', color: colors.paper3 },
-  segmentTitleActive: { color: colors.paper },
-  segmentCount: { fontSize: 12, color: colors.paper3 },
-  segmentUnderline: { height: 2, alignSelf: 'stretch', backgroundColor: 'transparent' },
-  segmentUnderlineActive: { backgroundColor: colors.blue },
+  topTab: { alignItems: 'flex-start' },
+  topTabLabelRow: { flexDirection: 'row', alignItems: 'baseline', gap: 6, paddingBottom: 12 },
+  topTabTitle: { fontSize: 14, fontWeight: '600', color: colors.paper3 },
+  topTabTitleActive: { color: colors.paper },
+  topTabCount: { fontSize: 12, color: colors.paper3 },
+  topTabUnderline: { height: 2, alignSelf: 'stretch', backgroundColor: 'transparent' },
+  topTabUnderlineActive: { backgroundColor: colors.blue },
 
-  scroll: { paddingTop: 14, paddingBottom: 140, gap: 20 },
+  scroll: { paddingTop: 14, paddingBottom: 140, gap: 16 },
+  scrollSaved: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 140,
+    gap: 28,
+  },
+
+  subTabRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 20,
+  },
+  subChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: colors.ink2,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.line,
+  },
+  subChipActive: { backgroundColor: colors.paper, borderColor: colors.paper },
+  subChipText: { fontSize: 12.5, fontWeight: '600', color: colors.paper2, letterSpacing: -0.1 },
+  subChipTextActive: { color: colors.ink },
+  subChipCount: { fontSize: 11, color: colors.paper3, opacity: 0.8 },
+
   spaCta: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -231,6 +461,10 @@ const styles = StyleSheet.create({
 
   list: { paddingHorizontal: 20, gap: 10 },
   divider: { height: 0.5, backgroundColor: colors.line, marginHorizontal: 20 },
+
+  savedHeader: { gap: 4, paddingHorizontal: 4 },
+  savedHeading: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  section: { gap: 12 },
 });
 
 const cardStyles = StyleSheet.create({
@@ -274,6 +508,71 @@ const pastStyles = StyleSheet.create({
   luxuryChip: { backgroundColor: 'rgba(168,216,240,0.14)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   luxuryChipText: { fontSize: 9, fontWeight: '700', color: colors.skyBlue, letterSpacing: 0.6 },
   detail: { fontSize: 11, color: colors.paper3 },
-  creditCol: { alignItems: 'flex-end' },
   cost: { fontSize: 11, color: colors.paper3 },
+});
+
+const rowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    backgroundColor: colors.ink2,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+  },
+  image: { width: 72, height: 72, borderRadius: 10 },
+  info: { flex: 1, gap: 4 },
+  name: { fontSize: 15, fontWeight: '600', color: colors.paper },
+  city: { fontSize: 12, color: colors.paper3 },
+  savedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
+  savedText: { fontSize: 11, fontWeight: '600', color: colors.blueMid },
+});
+
+const activityRowStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    backgroundColor: colors.ink2,
+    borderRadius: 14,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+  },
+  image: { width: 56, height: 56, borderRadius: 10 },
+  info: { flex: 1, gap: 3 },
+  name: { fontSize: 14, fontWeight: '600', color: colors.paper },
+  credits: { fontSize: 12, color: colors.skyBlue },
+});
+
+const suggestStyles = StyleSheet.create({
+  container: {
+    marginHorizontal: 0,
+    padding: 20,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+    overflow: 'hidden',
+    gap: 14,
+  },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  heading: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  list: { gap: 12 },
+  row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  image: { width: 48, height: 48, borderRadius: 8 },
+  rowInfo: { flex: 1, gap: 1 },
+  rowName: { fontSize: 13.5, fontWeight: '600', color: colors.paper },
+  rowReason: { fontSize: 11, color: colors.paper3, fontStyle: 'italic' },
+  addButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.ink3,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: colors.line2,
+  },
 });

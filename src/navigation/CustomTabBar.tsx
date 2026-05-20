@@ -4,21 +4,29 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { colors } from '../theme';
+import WaveIcon from '../components/WaveIcon';
 
 type TabConfig = {
-  routeName: 'Home' | 'Explore' | 'CheckIn' | 'Favourites' | 'Bookings';
+  routeName: 'Home' | 'Explore' | 'CheckIn' | 'Coach' | 'Bookings';
   label: string;
-  icon: keyof typeof Ionicons.glyphMap;
+  /** Standard Ionicons name. If omitted, renderIcon must be provided. */
+  icon?: keyof typeof Ionicons.glyphMap;
+  /** Custom icon renderer — receives (color, size) */
+  renderIcon?: (color: string, size: number) => React.ReactNode;
 };
 
 const LEFT_TABS: TabConfig[] = [
-  { routeName: 'Home', label: 'Home', icon: 'home-outline' },
+  { routeName: 'Home',    label: 'Home',    icon: 'home-outline' },
   { routeName: 'Explore', label: 'Explore', icon: 'search-outline' },
 ];
 
 const RIGHT_TABS: TabConfig[] = [
-  { routeName: 'Favourites', label: 'Saved', icon: 'heart-outline' },
-  { routeName: 'Bookings', label: 'Bookings', icon: 'calendar-outline' },
+  {
+    routeName: 'Coach',
+    label: 'Coach',
+    renderIcon: (color, size) => <WaveIcon size={size} color={color} />,
+  },
+  { routeName: 'Bookings', label: 'Library', icon: 'bookmark-outline' },
 ];
 
 const BAR_HEIGHT = 76;
@@ -90,13 +98,20 @@ function TabButton({
   onPress: () => void;
 }) {
   const color = isActive ? colors.paper : colors.paper3;
-  const iconName: keyof typeof Ionicons.glyphMap = isActive
-    ? (String(tab.icon).replace('-outline', '') as keyof typeof Ionicons.glyphMap)
-    : tab.icon;
+
+  function renderIcon() {
+    if (tab.renderIcon) {
+      return tab.renderIcon(color, 22);
+    }
+    const iconName: keyof typeof Ionicons.glyphMap = isActive
+      ? (String(tab.icon).replace('-outline', '') as keyof typeof Ionicons.glyphMap)
+      : (tab.icon as keyof typeof Ionicons.glyphMap);
+    return <Ionicons name={iconName} size={22} color={color} />;
+  }
 
   return (
     <TouchableOpacity style={styles.tabButton} onPress={onPress} activeOpacity={0.7}>
-      <Ionicons name={iconName} size={22} color={color} />
+      {renderIcon()}
       <Text style={[styles.label, { color, opacity: isActive ? 1 : 0.7 }]}>
         {tab.label.toUpperCase()}
       </Text>

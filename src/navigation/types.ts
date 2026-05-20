@@ -22,8 +22,9 @@ export type ExploreStackParamList = SharedTabRoutes & {
   ExploreMain: undefined;
 };
 
-export type FavouritesStackParamList = SharedTabRoutes & {
-  FavouritesMain: undefined;
+export type CoachStackParamList = {
+  CoachMain: undefined;
+  Account: undefined;
 };
 
 export type BookingsStackParamList = SharedTabRoutes & {
@@ -32,13 +33,14 @@ export type BookingsStackParamList = SharedTabRoutes & {
 
 export type CheckInStackParamList = {
   CheckInMain: undefined;
+  Account: undefined;
 };
 
 export type TabParamList = {
   Home: undefined;
   Explore: undefined;
   CheckIn: undefined;
-  Favourites: undefined;
+  Coach: undefined;
   Bookings: undefined;
 };
 
