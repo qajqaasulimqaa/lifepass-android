@@ -8,12 +8,17 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { mockVenues } from '../../data/mockVenues';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
 import CuratedVenueRow from '../../components/CuratedVenueRow';
+import type { HomeStackParamList } from '../../navigation/types';
+
+type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
 const HERO_HEIGHT = 520;
 const STUB_CREDITS = 12;
@@ -29,11 +34,16 @@ function getGreeting(): string {
 
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
 
   const hero = mockVenues[0];
   const nearby = mockVenues.slice(1, 4);
   const curated = mockVenues.slice(4);
   const greeting = getGreeting();
+
+  function openVenue(venueId: string) {
+    navigation.navigate('VenueDetail', { venueId });
+  }
 
   return (
     <ScrollView
@@ -88,7 +98,7 @@ export default function HomeScreen() {
                 <Text style={styles.venueCity}>{hero.city}</Text>
               </View>
 
-              <TouchableOpacity style={styles.bookButton}>
+              <TouchableOpacity style={styles.bookButton} onPress={() => openVenue(hero.id)}>
                 <Text style={styles.bookButtonText}>
                   Book · {hero.creditCost} cr →
                 </Text>
@@ -118,7 +128,9 @@ export default function HomeScreen() {
             contentContainerStyle={styles.horizontalScroll}
           >
             {nearby.map((venue) => (
-              <NearbyVenueCard key={venue.id} venue={venue} />
+              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                <NearbyVenueCard venue={venue} />
+              </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
@@ -134,7 +146,9 @@ export default function HomeScreen() {
 
           <View style={styles.curatedList}>
             {curated.map((venue) => (
-              <CuratedVenueRow key={venue.id} venue={venue} />
+              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                <CuratedVenueRow venue={venue} />
+              </TouchableOpacity>
             ))}
           </View>
         </View>

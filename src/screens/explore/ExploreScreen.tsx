@@ -11,8 +11,13 @@ import {
   Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker, Callout } from 'react-native-maps';
+import MapView, { Marker } from 'react-native-maps';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { ExploreStackParamList } from '../../navigation/types';
+
+type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 import { colors } from '../../theme';
 import { mockVenues } from '../../data/mockVenues';
 import { categoryFilters, matchesCategory } from '../../data/categories';
@@ -40,6 +45,11 @@ const REYKJAVIK = {
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
+  const navigation = useNavigation<Nav>();
+
+  function openVenue(venueId: string) {
+    navigation.navigate('VenueDetail', { venueId });
+  }
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
@@ -184,7 +194,11 @@ export default function ExploreScreen() {
           </MapView>
 
           {selectedVenue && (
-            <View style={styles.venuePopup}>
+            <TouchableOpacity
+              style={styles.venuePopup}
+              activeOpacity={0.85}
+              onPress={() => openVenue(selectedVenue.id)}
+            >
               <Image source={{ uri: selectedVenue.imageUrl }} style={styles.popupImage} />
               <View style={styles.popupInfo}>
                 <Text style={styles.popupName} numberOfLines={1}>{selectedVenue.name}</Text>
@@ -192,7 +206,7 @@ export default function ExploreScreen() {
               </View>
               <CreditPill credits={selectedVenue.creditCost} compact />
               <Text style={styles.popupArrow}>→</Text>
-            </View>
+            </TouchableOpacity>
           )}
         </View>
       ) : (
@@ -203,7 +217,11 @@ export default function ExploreScreen() {
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={<EditorialBanner />}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-          renderItem={({ item }) => <ExploreListRow venue={item} />}
+          renderItem={({ item }) => (
+            <TouchableOpacity activeOpacity={0.85} onPress={() => openVenue(item.id)}>
+              <ExploreListRow venue={item} />
+            </TouchableOpacity>
+          )}
           ListFooterComponent={<View style={{ height: 120 }} />}
         />
       )}

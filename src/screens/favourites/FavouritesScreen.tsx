@@ -1,6 +1,8 @@
 import { View, Text, ScrollView, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { mockVenues } from '../../data/mockVenues';
 import { mockFavouriteVenueIds, mockFavouriteActivities } from '../../data/mockFavourites';
@@ -9,10 +11,16 @@ import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import EmptyState from '../../components/EmptyState';
 import type { Venue } from '../../types/venue';
+import type { FavouritesStackParamList } from '../../navigation/types';
+
+type Nav = NativeStackNavigationProp<FavouritesStackParamList>;
 
 const STUB_CREDITS = 12;
 
 export default function FavouritesScreen() {
+  const navigation = useNavigation<Nav>();
+  const openVenue = (venueId: string) => navigation.navigate('VenueDetail', { venueId });
+
   const savedVenues = mockVenues.filter((v) => mockFavouriteVenueIds.includes(v.id));
   const savedActivities = mockFavouriteActivities;
   const suggestions = mockVenues
@@ -36,7 +44,9 @@ export default function FavouritesScreen() {
         ) : (
           <View style={styles.list}>
             {savedVenues.map((venue) => (
-              <SavedVenueRow key={venue.id} venue={venue} />
+              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                <SavedVenueRow venue={venue} />
+              </TouchableOpacity>
             ))}
           </View>
         )}
@@ -79,7 +89,9 @@ export default function FavouritesScreen() {
 
           <View style={suggestStyles.list}>
             {suggestions.map((venue) => (
-              <SuggestionRow key={venue.id} venue={venue} />
+              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                <SuggestionRow venue={venue} />
+              </TouchableOpacity>
             ))}
           </View>
         </View>
