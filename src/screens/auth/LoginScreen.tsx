@@ -30,7 +30,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.paper,
     marginBottom: 32,
   },
   button: {
@@ -42,7 +42,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   buttonText: {
-    color: colors.white,
+    color: colors.paper,
     fontSize: 16,
     fontWeight: '600',
   },

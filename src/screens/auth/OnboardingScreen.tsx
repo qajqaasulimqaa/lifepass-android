@@ -36,12 +36,12 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 40,
     fontWeight: '700',
-    color: colors.white,
+    color: colors.paper,
     marginBottom: 8,
   },
   tagline: {
     fontSize: 16,
-    color: colors.muted,
+    color: colors.paper3,
     marginBottom: 48,
   },
   button: {
@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   buttonText: {
-    color: colors.white,
+    color: colors.paper,
     fontSize: 16,
     fontWeight: '600',
   },

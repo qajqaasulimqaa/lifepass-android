@@ -16,11 +16,11 @@ export default function TabNavigator() {
       screenOptions={{
         headerShown: false,
         tabBarStyle: {
-          backgroundColor: colors.navy,
-          borderTopColor: colors.border,
+          backgroundColor: colors.ink3,
+          borderTopColor: colors.line,
         },
         tabBarActiveTintColor: colors.blue,
-        tabBarInactiveTintColor: colors.muted,
+        tabBarInactiveTintColor: colors.paper3,
       }}
     >
       <Tab.Screen
