@@ -23,7 +23,7 @@ export type ExploreStackParamList = SharedTabRoutes & {
 };
 
 export type CoachStackParamList = {
-  CoachMain: undefined;
+  CoachMain: { prefilledMessage?: string } | undefined;
   Account: undefined;
 };
 

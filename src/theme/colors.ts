@@ -22,4 +22,7 @@ export const colors = {
   skyBlue:     '#A8D8F0',  // signal / luxury accents
   moss:        '#5EB3A5',  // success
   destructive: '#D36363',  // error / warning
+
+  
 } as const;
+

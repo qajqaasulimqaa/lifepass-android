@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo } from 'react';
+import { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute, type RouteProp } from '@react-navigation/native';
 import { colors } from '../../theme';
 import WaveIcon from '../../components/WaveIcon';
 import {
@@ -24,6 +25,7 @@ import { sendCoachMessage } from '../../supabase/services/coach';
 import { useBookings } from '../../supabase/hooks/useBookings';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import type { ChatMessage } from '../../types/coach';
+import type { CoachStackParamList } from '../../navigation/types';
 import ChatDrawer from './ChatDrawer';
 import SuggestionChips from './SuggestionChips';
 
@@ -34,6 +36,9 @@ const CONTEXT_HEADING = 'Gym yesterday.\nToday is relaxing day.';
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
+  const route = useRoute<RouteProp<CoachStackParamList, 'CoachMain'>>();
+  const prefilledMessage = route.params?.prefilledMessage;
+
   const { bookings: pastBookings } = useBookings(false);
   const { savedVenues } = useFavouriteVenues();
 
@@ -42,6 +47,9 @@ export default function CoachScreen() {
   const [isTyping, setIsTyping] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  // Guards against the auto-send firing more than once if React StrictMode
+  // double-invokes the effect or the screen re-mounts.
+  const autoSentRef = useRef(false);
 
   // Derive activity tags from real bookings + favourited venues, then pick
   // the 4 most-relevant suggestion chips from the bank.
@@ -93,6 +101,15 @@ export default function CoachScreen() {
       setIsTyping(false);
     }
   }
+
+  // Auto-send a message passed via navigation params (e.g. when the user
+  // tapped a category card on Home). Fires once on mount only.
+  useEffect(() => {
+    if (!prefilledMessage || autoSentRef.current) return;
+    autoSentRef.current = true;
+    send(prefilledMessage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefilledMessage]);
 
   function resetChat() {
     setMessages(mockCoachMessages);

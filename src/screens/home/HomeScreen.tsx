@@ -9,8 +9,11 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import { useAuth } from '../../supabase/hooks/useAuth';
@@ -19,9 +22,15 @@ import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
 import CuratedVenueRow from '../../components/CuratedVenueRow';
-import type { HomeStackParamList } from '../../navigation/types';
+import { coachCategories, type CoachCategory } from '../../data/coachCategories';
+import type { HomeStackParamList, TabParamList } from '../../navigation/types';
 
-type Nav = NativeStackNavigationProp<HomeStackParamList>;
+// Composite navigation type — lets us navigate inside HomeStack AND
+// across tabs (to Coach with a prefilled prompt).
+type Nav = CompositeNavigationProp<
+  NativeStackNavigationProp<HomeStackParamList>,
+  BottomTabNavigationProp<TabParamList>
+>;
 
 const HERO_HEIGHT = 520;
 
@@ -55,6 +64,13 @@ export default function HomeScreen() {
 
   function openAccount() {
     navigation.navigate('Account');
+  }
+
+  function openCoach(prefilledMessage?: string) {
+    navigation.navigate('Coach', {
+      screen: 'CoachMain',
+      params: prefilledMessage ? { prefilledMessage } : undefined,
+    } as never);
   }
 
   return (
@@ -160,6 +176,12 @@ export default function HomeScreen() {
             </View>
           )}
 
+          {/* Try something new — links to Coach AI */}
+          <TryNewSection
+            onCategoryPress={(cat) => openCoach(cat.prompt)}
+            onHelpPress={() => openCoach('I want to try something new — what do you suggest?')}
+          />
+
           {/* Curated */}
           {curated.length > 0 && (
             <View style={styles.shelf}>
@@ -186,6 +208,111 @@ export default function HomeScreen() {
     </ScrollView>
   );
 }
+
+// ─── Try-Something-New section ────────────────────────────────────────────────
+
+function TryNewSection({
+  onCategoryPress,
+  onHelpPress,
+}: {
+  onCategoryPress: (category: CoachCategory) => void;
+  onHelpPress: () => void;
+}) {
+  return (
+    <View style={trySection.container}>
+      <Text style={trySection.heading}>
+        Want to try{' '}
+        <Text style={trySection.italic}>something new?</Text>
+      </Text>
+
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={trySection.scrollContent}
+      >
+        {coachCategories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={trySection.card}
+            onPress={() => onCategoryPress(cat)}
+            activeOpacity={0.85}
+          >
+            <Image source={{ uri: cat.imageUrl }} style={trySection.cardImage} />
+            <Text style={trySection.cardLabel} numberOfLines={2}>{cat.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={trySection.cta}
+        onPress={onHelpPress}
+        activeOpacity={0.85}
+      >
+        <Text style={trySection.ctaText}>Let me help!</Text>
+        <Ionicons name="arrow-forward" size={16} color={colors.ink} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const trySection = StyleSheet.create({
+  container: {
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  heading: {
+    fontSize: 26,
+    fontWeight: '400',
+    color: colors.paper,
+    letterSpacing: -0.4,
+    textAlign: 'center',
+  },
+  italic: {
+    fontStyle: 'italic',
+    color: colors.paper,
+  },
+  scrollContent: {
+    gap: 14,
+    paddingHorizontal: 4,
+    paddingVertical: 4,
+  },
+  card: {
+    width: 96,
+    alignItems: 'center',
+    gap: 8,
+  },
+  cardImage: {
+    width: 88,
+    height: 88,
+    borderRadius: 44,
+    backgroundColor: colors.ink3,
+  },
+  cardLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    color: colors.paper2,
+    textAlign: 'center',
+    lineHeight: 15,
+  },
+  cta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 28,
+    paddingVertical: 14,
+    backgroundColor: colors.paper,
+    borderRadius: 999,
+    minWidth: 220,
+  },
+  ctaText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: colors.ink,
+    letterSpacing: -0.1,
+  },
+});
 
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.ink },
