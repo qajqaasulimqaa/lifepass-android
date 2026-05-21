@@ -11,7 +11,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
-import { useAuthStore } from '../../stores/authStore';
+import { signIn, resetPassword } from '../../supabase/services/auth';
 import Wordmark from '../../components/Wordmark';
 import AuthField from '../../components/AuthField';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -19,29 +19,46 @@ import type { AuthStackScreenProps } from '../../navigation/types';
 
 export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'>) {
   const insets = useSafeAreaInsets();
-  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [resetSent, setResetSent] = useState(false);
 
-  function handleSignIn() {
+  async function handleSignIn() {
     setError(null);
     if (!email.trim() || !password) {
       setError('Please enter your email and password.');
       return;
     }
     setLoading(true);
-    setTimeout(() => {
+    try {
+      await signIn(email.trim(), password);
+      // Navigation happens automatically — RootNavigator reacts to onAuthStateChange
+    } catch (e: any) {
+      setError(friendlyAuthError(e.message));
+    } finally {
       setLoading(false);
-      setAuthenticated(true);
-    }, 400);
+    }
+  }
+
+  async function handleForgotPassword() {
+    if (!email.trim()) {
+      setError('Enter your email above first.');
+      return;
+    }
+    try {
+      await resetPassword(email.trim());
+      setResetSent(true);
+      setError(null);
+    } catch (e: any) {
+      setError(e.message);
+    }
   }
 
   return (
     <View style={styles.container}>
-      {/* Radial glow behind wordmark */}
       <LinearGradient
         colors={['rgba(0,136,255,0.25)', 'transparent']}
         start={{ x: 0.5, y: 0.0 }}
@@ -71,10 +88,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
               icon="mail-outline"
               placeholder="Email"
               value={email}
-              onChangeText={(v) => {
-                setEmail(v);
-                if (error) setError(null);
-              }}
+              onChangeText={(v) => { setEmail(v); setError(null); setResetSent(false); }}
               keyboardType="email-address"
               autoComplete="email"
             />
@@ -82,16 +96,16 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
               icon="lock-closed-outline"
               placeholder="Password"
               value={password}
-              onChangeText={(v) => {
-                setPassword(v);
-                if (error) setError(null);
-              }}
+              onChangeText={(v) => { setPassword(v); setError(null); }}
               secure
               autoComplete="current-password"
             />
           </View>
 
           {error && <Text style={styles.error}>{error}</Text>}
+          {resetSent && (
+            <Text style={styles.success}>Password reset email sent — check your inbox.</Text>
+          )}
 
           <View style={styles.cta}>
             <PrimaryButton
@@ -102,7 +116,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
           </View>
 
           <View style={styles.links}>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={handleForgotPassword}>
               <Text style={styles.forgot}>Forgot your password?</Text>
             </TouchableOpacity>
 
@@ -119,6 +133,14 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
   );
 }
 
+/** Map raw Supabase error messages to user-friendly strings */
+function friendlyAuthError(message: string): string {
+  if (message.includes('Invalid login credentials')) return 'Incorrect email or password.';
+  if (message.includes('Email not confirmed')) return 'Please confirm your email first.';
+  if (message.includes('Too many requests')) return 'Too many attempts — wait a moment and try again.';
+  return message;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
   scroll: { paddingHorizontal: 24, gap: 0 },
@@ -128,6 +150,12 @@ const styles = StyleSheet.create({
   error: {
     fontSize: 13,
     color: colors.destructive,
+    textAlign: 'center',
+    marginTop: 10,
+  },
+  success: {
+    fontSize: 13,
+    color: colors.moss,
     textAlign: 'center',
     marginTop: 10,
   },

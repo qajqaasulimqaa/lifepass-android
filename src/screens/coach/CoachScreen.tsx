@@ -17,17 +17,15 @@ import WaveIcon from '../../components/WaveIcon';
 import {
   mockCoachMessages,
   recentChats,
-  chipBank,
   selectChips,
-  getCannedReply,
 } from '../../data/mockCoach';
-import type { ActivityTag } from '../../data/mockCoach';
+import { deriveActivityTags } from '../../coach/deriveTags';
+import { sendCoachMessage } from '../../supabase/services/coach';
+import { useBookings } from '../../supabase/hooks/useBookings';
+import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import type { ChatMessage } from '../../types/coach';
 import ChatDrawer from './ChatDrawer';
 import SuggestionChips from './SuggestionChips';
-
-// ─── Mock user activity — in production this comes from bookings + favourites ──
-const USER_ACTIVITY_TAGS: ActivityTag[] = ['lagoon', 'gym', 'swimming', 'yoga', 'recovery'];
 
 let idCounter = 100;
 const nextId = () => String(++idCounter);
@@ -36,36 +34,64 @@ const CONTEXT_HEADING = 'Gym yesterday.\nToday is relaxing day.';
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
+  const { bookings: pastBookings } = useBookings(false);
+  const { savedVenues } = useFavouriteVenues();
+
   const [messages, setMessages] = useState<ChatMessage[]>(mockCoachMessages);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
 
-  // Pick 4 chips from the bank based on user activity — stable across renders
-  const chips = useMemo(() => selectChips(USER_ACTIVITY_TAGS), []);
+  // Derive activity tags from real bookings + favourited venues, then pick
+  // the 4 most-relevant suggestion chips from the bank.
+  const userTags = useMemo(
+    () => deriveActivityTags({ bookings: pastBookings, favourites: savedVenues }),
+    [pastBookings, savedVenues],
+  );
+  const chips = useMemo(() => selectChips(userTags), [userTags]);
 
   const hasStartedChat = messages.some((m) => m.role === 'user');
 
-  function send(text: string) {
+  async function send(text: string) {
     const trimmed = text.trim();
     if (!trimmed || isTyping) return;
 
-    setMessages((m) => [
-      ...m,
-      { id: nextId(), role: 'user', text: trimmed, createdAt: new Date() },
-    ]);
+    const userMsg: ChatMessage = {
+      id: nextId(),
+      role: 'user',
+      text: trimmed,
+      createdAt: new Date(),
+    };
+    // We send the full conversation (including the new user message) to the
+    // coach so it has context.  React's setState is async, so build the
+    // outgoing history explicitly.
+    const outgoing = [...messages, userMsg];
+    setMessages(outgoing);
     setInput('');
     setIsTyping(true);
 
-    setTimeout(() => {
+    try {
+      const reply = await sendCoachMessage(outgoing);
       setMessages((m) => [
         ...m,
-        { id: nextId(), role: 'assistant', text: getCannedReply(trimmed), createdAt: new Date() },
+        { id: nextId(), role: 'assistant', text: reply, createdAt: new Date() },
       ]);
-      setIsTyping(false);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-    }, 900);
+    } catch (e) {
+      const err = e instanceof Error ? e.message : 'Coach is unavailable right now.';
+      setMessages((m) => [
+        ...m,
+        {
+          id: nextId(),
+          role: 'assistant',
+          text: `Sorry — I couldn't reach the coach service.\n\n${err}`,
+          createdAt: new Date(),
+        },
+      ]);
+    } finally {
+      setIsTyping(false);
+    }
   }
 
   function resetChat() {

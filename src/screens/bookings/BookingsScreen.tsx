@@ -6,22 +6,23 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
-import { mockBookings } from '../../data/mockBookings';
-import { mockVenues } from '../../data/mockVenues';
-import { mockFavouriteVenueIds, mockFavouriteActivities } from '../../data/mockFavourites';
-import { mockSubscription } from '../../data/mockAccount';
+import { useBookings } from '../../supabase/hooks/useBookings';
+import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
+import { useVenues } from '../../supabase/hooks/useVenues';
 import BrandedTopBar from '../../components/BrandedTopBar';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import EmptyState from '../../components/EmptyState';
 import type { Booking } from '../../types/booking';
 import type { Venue } from '../../types/venue';
+import type { Activity } from '../../types/venue';
 import type { BookingsStackParamList } from '../../navigation/types';
 
 type TopTab = 'bookings' | 'saved';
@@ -49,55 +50,55 @@ export default function BookingsScreen() {
   const [topTab, setTopTab] = useState<TopTab>('bookings');
   const [subTab, setSubTab] = useState<BookingsSubTab>('upcoming');
 
+  const { bookings: upcomingBookings, loading: loadingUp } = useBookings(true);
+  const { bookings: pastBookings, loading: loadingPast } = useBookings(false);
+  const { savedVenues, savedVenueIds, loading: loadingFavs } = useFavouriteVenues();
+  const { venues, loading: loadingVenues } = useVenues();
+
+  const loading = loadingUp || loadingPast || loadingFavs;
+
+  const suggestions = useMemo(
+    () => venues.filter((v) => !savedVenueIds.includes(v.id)).slice(0, 3),
+    [venues, savedVenueIds],
+  );
+
   const openVenue = (venueId: string) => navigation.navigate('VenueDetail', { venueId });
-
-  const { upcoming, past } = useMemo(() => {
-    const now = new Date();
-    return {
-      upcoming: mockBookings.filter((b) => b.status === 'confirmed' && b.bookingTime > now),
-      past: mockBookings.filter((b) => b.status !== 'confirmed' || b.bookingTime <= now),
-    };
-  }, []);
-
-  const savedVenues = mockVenues.filter((v) => mockFavouriteVenueIds.includes(v.id));
-  const savedActivities = mockFavouriteActivities;
-  const suggestions = mockVenues.filter((v) => !mockFavouriteVenueIds.includes(v.id)).slice(0, 3);
 
   return (
     <View style={styles.container}>
-      <BrandedTopBar
-        title="Library"
-        subtitle="Bookings & saved"
-        credits={mockSubscription.totalCredits}
-      />
+      <BrandedTopBar title="Library" subtitle="Bookings & saved" />
 
       {/* Top tabs */}
       <View style={styles.topTabs}>
         <TopTabButton
           title="Bookings"
-          count={upcoming.length + past.length}
+          count={upcomingBookings.length + pastBookings.length}
           active={topTab === 'bookings'}
           onPress={() => setTopTab('bookings')}
         />
         <TopTabButton
           title="Saved"
-          count={savedVenues.length + savedActivities.length}
+          count={savedVenues.length}
           active={topTab === 'saved'}
           onPress={() => setTopTab('saved')}
         />
       </View>
 
-      {topTab === 'bookings' ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.blue} />
+        </View>
+      ) : topTab === 'bookings' ? (
         <BookingsTab
           subTab={subTab}
           onSubTab={setSubTab}
-          upcoming={upcoming}
-          past={past}
+          upcoming={upcomingBookings}
+          past={pastBookings}
         />
       ) : (
         <SavedTab
           savedVenues={savedVenues}
-          savedActivities={savedActivities}
+          savedActivities={[]}
           suggestions={suggestions}
           openVenue={openVenue}
         />
@@ -205,7 +206,7 @@ function SavedTab({
   openVenue,
 }: {
   savedVenues: Venue[];
-  savedActivities: typeof mockFavouriteActivities;
+  savedActivities: Activity[];
   suggestions: Venue[];
   openVenue: (venueId: string) => void;
 }) {
@@ -390,6 +391,8 @@ function SuggestionRow({ venue }: { venue: Venue }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
+
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
 
   topTabs: {
     flexDirection: 'row',

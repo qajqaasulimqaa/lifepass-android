@@ -4,20 +4,17 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../theme';
 import CreditPill from './CreditPill';
 import Kicker from './Kicker';
+import { useSubscription } from '../supabase/hooks/useSubscription';
 
 type Props = {
   title: string;
   subtitle?: string;
-  credits: number;
 };
 
-export default function BrandedTopBar({ title, subtitle, credits }: Props) {
+export default function BrandedTopBar({ title, subtitle }: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-
-  function openAccount() {
-    navigation.navigate('Account');
-  }
+  const { credits } = useSubscription();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -35,7 +32,7 @@ export default function BrandedTopBar({ title, subtitle, credits }: Props) {
         </View>
 
         <View style={styles.right}>
-          <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
+          <TouchableOpacity onPress={() => navigation.navigate('Account')} activeOpacity={0.7}>
             <CreditPill credits={credits} />
           </TouchableOpacity>
         </View>

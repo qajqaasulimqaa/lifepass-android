@@ -1,12 +1,12 @@
 import { useState, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
-import { mockVenues } from '../../data/mockVenues';
-import { mockSubscription } from '../../data/mockAccount';
+import { useSubscription } from '../../supabase/hooks/useSubscription';
+import { walkInCheckIn, CheckInError } from '../../supabase/services/checkin';
 import BrandedTopBar from '../../components/BrandedTopBar';
 import PrimaryButton from '../../components/PrimaryButton';
 import Kicker from '../../components/Kicker';
@@ -26,9 +26,13 @@ function dateReceipt(date: Date): string {
 export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
+  const { refetch: refetchSubscription } = useSubscription();
+
   const [mode, setMode] = useState<Mode>('idle');
   const [scannedVenueName, setScannedVenueName] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
+  const [remainingBalance, setRemainingBalance] = useState<number | null>(null);
+  const [isLuxuryVisit, setIsLuxuryVisit] = useState(false);
   const scannedRef = useRef(false);
 
   function handleStartScan() {
@@ -40,23 +44,37 @@ export default function CheckInScreen() {
     setMode('scanning');
   }
 
-  function handleBarcode() {
+  async function handleBarcode(result?: { data?: string }) {
     if (scannedRef.current) return;
     scannedRef.current = true;
     setMode('processing');
 
-    setTimeout(() => {
-      const venue = mockVenues[Math.floor(Math.random() * mockVenues.length)];
-      setScannedVenueName(venue.name);
+    try {
+      const r = await walkInCheckIn(result?.data ?? '');
+      setScannedVenueName(r.venue.name);
+      setRemainingBalance(r.remainingBalance);
+      setIsLuxuryVisit(r.isLuxury);
       setReceipt(dateReceipt(new Date()));
       setMode('success');
-    }, 800);
+      refetchSubscription();   // refresh global credits pill
+    } catch (e) {
+      const message =
+        e instanceof CheckInError ? e.message
+        : e instanceof Error ? e.message
+        : 'Check-in failed.';
+      // Reset to idle so the user can try again, then surface the error.
+      scannedRef.current = false;
+      setMode('idle');
+      Alert.alert('Check-in failed', message);
+    }
   }
 
   function reset() {
     setMode('idle');
     setScannedVenueName(null);
     setReceipt(null);
+    setRemainingBalance(null);
+    setIsLuxuryVisit(false);
   }
 
   if (mode === 'scanning') {
@@ -104,7 +122,6 @@ export default function CheckInScreen() {
         <BrandedTopBar
           title="Studio check-in"
           subtitle="For your classes"
-          credits={mockSubscription.totalCredits - 1}
         />
         <View style={successStyles.container}>
           <View style={successStyles.checkCircle}>
@@ -114,10 +131,13 @@ export default function CheckInScreen() {
           <Text style={successStyles.title}>Checked in</Text>
           <Text style={successStyles.venue}>{scannedVenueName}</Text>
           {receipt && <Kicker text={receipt} color={colors.paper3} />}
+          {isLuxuryVisit && <Kicker text="Luxury visit" color={colors.skyBlue} />}
           <View style={successStyles.divider} />
           <View style={successStyles.creditsRow}>
             <Text style={successStyles.creditsLabel}>Credits remaining</Text>
-            <Text style={successStyles.creditsValue}>{mockSubscription.totalCredits - 1}</Text>
+            <Text style={successStyles.creditsValue}>
+              {remainingBalance ?? 0}
+            </Text>
           </View>
           <View style={{ alignSelf: 'stretch', marginTop: 24 }}>
             <PrimaryButton title="Done" onPress={reset} />
@@ -132,7 +152,6 @@ export default function CheckInScreen() {
       <BrandedTopBar
         title="Studio check-in"
         subtitle="For your classes"
-        credits={mockSubscription.totalCredits}
       />
 
       <View style={idleStyles.container}>

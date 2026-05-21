@@ -5,13 +5,16 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
-import { mockVenues } from '../../data/mockVenues';
+import { useVenues } from '../../supabase/hooks/useVenues';
+import { useAuth } from '../../supabase/hooks/useAuth';
+import { useSubscription } from '../../supabase/hooks/useSubscription';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
@@ -21,8 +24,6 @@ import type { HomeStackParamList } from '../../navigation/types';
 type Nav = NativeStackNavigationProp<HomeStackParamList>;
 
 const HERO_HEIGHT = 520;
-const STUB_CREDITS = 12;
-const STUB_FIRST_NAME = 'Kaja';
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -35,11 +36,18 @@ function getGreeting(): string {
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
+  const { user } = useAuth();
+  const { credits } = useSubscription();
+  const { venues, loading } = useVenues();
 
-  const hero = mockVenues[0];
-  const nearby = mockVenues.slice(1, 4);
-  const curated = mockVenues.slice(4);
   const greeting = getGreeting();
+  const fullName: string = user?.user_metadata?.full_name ?? user?.email ?? '';
+  const firstName = fullName.split(' ')[0] || 'there';
+  const initial = firstName.charAt(0).toUpperCase();
+
+  const hero = venues[0];
+  const nearby = venues.slice(1, 4);
+  const curated = venues.slice(4);
 
   function openVenue(venueId: string) {
     navigation.navigate('VenueDetail', { venueId });
@@ -57,7 +65,11 @@ export default function HomeScreen() {
     >
       {/* Hero */}
       <View style={styles.heroContainer}>
-        <Image source={{ uri: hero.imageUrl }} style={styles.heroImage} />
+        {hero ? (
+          <Image source={{ uri: hero.imageUrl }} style={styles.heroImage} />
+        ) : (
+          <View style={[styles.heroImage, { backgroundColor: colors.ink2 }]} />
+        )}
 
         <LinearGradient
           colors={[
@@ -74,111 +86,112 @@ export default function HomeScreen() {
           {/* Top bar */}
           <View style={styles.topBar}>
             <TouchableOpacity style={styles.avatar} onPress={openAccount}>
-              <Text style={styles.avatarInitial}>
-                {STUB_FIRST_NAME.charAt(0).toUpperCase()}
-              </Text>
+              <Text style={styles.avatarInitial}>{initial}</Text>
             </TouchableOpacity>
 
             <Kicker text="Today · Reykjavík" color={colors.paper2} />
 
             <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
-              <CreditPill credits={STUB_CREDITS} />
+              <CreditPill credits={credits} />
             </TouchableOpacity>
           </View>
 
-          {/* Editorial copy at bottom of hero */}
+          {/* Editorial copy */}
           <View style={styles.editorial}>
             <Kicker text={greeting} color={colors.paper2} />
 
             <Text style={styles.greetingText}>
               {greeting},{' '}
-              <Text style={styles.greetingName}>{STUB_FIRST_NAME}.</Text>
+              <Text style={styles.greetingName}>{firstName}.</Text>
               {'\n'}
               <Text style={styles.greetingTagline}>The sky is clearing.</Text>
             </Text>
 
-            <View style={styles.venueRow}>
-              <View>
-                <Kicker text="Tonight's pick" color={colors.skyBlue} />
-                <Text style={styles.venueName}>{hero.name}</Text>
-                <Text style={styles.venueCity}>{hero.city}</Text>
-              </View>
+            {hero && (
+              <View style={styles.venueRow}>
+                <View>
+                  <Kicker text="Tonight's pick" color={colors.skyBlue} />
+                  <Text style={styles.venueName}>{hero.name}</Text>
+                  <Text style={styles.venueCity}>{hero.city}</Text>
+                </View>
 
-              <TouchableOpacity style={styles.bookButton} onPress={() => openVenue(hero.id)}>
-                <Text style={styles.bookButtonText}>
-                  Book · {hero.creditCost} cr →
-                </Text>
-              </TouchableOpacity>
-            </View>
+                <TouchableOpacity style={styles.bookButton} onPress={() => openVenue(hero.id)}>
+                  <Text style={styles.bookButtonText}>
+                    Book · {hero.creditCost} cr →
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
       </View>
 
       {/* Shelves */}
-      <View style={styles.shelves}>
-        {/* Near You */}
-        <View style={styles.shelf}>
-          <View style={styles.shelfHeader}>
-            <View>
-              <Kicker text="Near You" />
-              <Text style={styles.shelfTitle}>Close by</Text>
-            </View>
-            <TouchableOpacity style={styles.allButton}>
-              <Text style={styles.allButtonText}>All →</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.horizontalScroll}
-          >
-            {nearby.map((venue) => (
-              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                <NearbyVenueCard venue={venue} />
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.blue} />
         </View>
+      ) : (
+        <View style={styles.shelves}>
+          {/* Near You */}
+          {nearby.length > 0 && (
+            <View style={styles.shelf}>
+              <View style={styles.shelfHeader}>
+                <View>
+                  <Kicker text="Near You" />
+                  <Text style={styles.shelfTitle}>Close by</Text>
+                </View>
+                <TouchableOpacity style={styles.allButton}>
+                  <Text style={styles.allButtonText}>All →</Text>
+                </TouchableOpacity>
+              </View>
 
-        {/* Curated */}
-        <View style={styles.shelf}>
-          <View style={styles.shelfHeader}>
-            <View>
-              <Kicker text={`Curated · ${greeting.toLowerCase()}`} />
-              <Text style={styles.shelfTitle}>Picked for you</Text>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.horizontalScroll}
+              >
+                {nearby.map((venue) => (
+                  <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                    <NearbyVenueCard venue={venue} />
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
             </View>
-          </View>
+          )}
 
-          <View style={styles.curatedList}>
-            {curated.map((venue) => (
-              <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                <CuratedVenueRow venue={venue} />
-              </TouchableOpacity>
-            ))}
-          </View>
+          {/* Curated */}
+          {curated.length > 0 && (
+            <View style={styles.shelf}>
+              <View style={styles.shelfHeader}>
+                <View>
+                  <Kicker text={`Curated · ${greeting.toLowerCase()}`} />
+                  <Text style={styles.shelfTitle}>Picked for you</Text>
+                </View>
+              </View>
+
+              <View style={styles.curatedList}>
+                {curated.map((venue) => (
+                  <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
+                    <CuratedVenueRow venue={venue} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          <View style={{ height: 120 }} />
         </View>
-
-        <View style={{ height: 120 }} />
-      </View>
+      )}
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
-    flex: 1,
-    backgroundColor: colors.ink,
-  },
-  content: {
-    flexGrow: 1,
-  },
-  heroContainer: {
-    height: HERO_HEIGHT,
-  },
-  heroImage: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  scroll: { flex: 1, backgroundColor: colors.ink },
+  content: { flexGrow: 1 },
+  heroContainer: { height: HERO_HEIGHT },
+  heroImage: { ...StyleSheet.absoluteFillObject },
   heroInner: {
     flex: 1,
     paddingHorizontal: 20,
@@ -190,107 +203,54 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   avatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 38, height: 38, borderRadius: 19,
     backgroundColor: colors.ink3,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.line2,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1, borderColor: colors.line2,
   },
-  avatarInitial: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: colors.paper,
-  },
-  editorial: {
-    paddingBottom: 28,
-    gap: 14,
-  },
+  avatarInitial: { fontSize: 16, fontWeight: '600', color: colors.paper },
+  editorial: { paddingBottom: 28, gap: 14 },
   greetingText: {
-    fontSize: 36,
-    fontWeight: '400',
-    color: colors.paper,
-    letterSpacing: -1.2,
-    lineHeight: 44,
+    fontSize: 36, fontWeight: '400', color: colors.paper,
+    letterSpacing: -1.2, lineHeight: 44,
   },
-  greetingName: {
-    color: colors.paper,
-  },
-  greetingTagline: {
-    color: colors.paper2,
-    fontStyle: 'italic',
-  },
+  greetingName: { color: colors.paper },
+  greetingTagline: { color: colors.paper2, fontStyle: 'italic' },
   venueRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     justifyContent: 'space-between',
   },
   venueName: {
-    fontSize: 24,
-    fontWeight: '400',
-    color: colors.paper,
-    letterSpacing: -0.6,
-    marginTop: 6,
+    fontSize: 24, fontWeight: '400', color: colors.paper,
+    letterSpacing: -0.6, marginTop: 6,
   },
-  venueCity: {
-    fontSize: 16,
-    fontStyle: 'italic',
-    color: colors.paper2,
-  },
+  venueCity: { fontSize: 16, fontStyle: 'italic', color: colors.paper2 },
   bookButton: {
-    backgroundColor: colors.paper,
-    borderRadius: 999,
-    paddingHorizontal: 18,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: colors.paper, borderRadius: 999,
+    paddingHorizontal: 18, height: 44,
+    alignItems: 'center', justifyContent: 'center',
   },
-  bookButtonText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: colors.ink,
+  bookButtonText: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  loadingContainer: {
+    flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60,
   },
-  shelves: {
-    paddingTop: 12,
-    gap: 32,
-  },
-  shelf: {
-    gap: 14,
-  },
+  shelves: { paddingTop: 12, gap: 32 },
+  shelf: { gap: 14 },
   shelfHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
-    paddingHorizontal: 24,
+    flexDirection: 'row', alignItems: 'flex-end',
+    justifyContent: 'space-between', paddingHorizontal: 24,
   },
   shelfTitle: {
-    fontSize: 22,
-    fontWeight: '400',
-    color: colors.paper,
-    letterSpacing: -0.4,
-    marginTop: 4,
+    fontSize: 22, fontWeight: '400', color: colors.paper,
+    letterSpacing: -0.4, marginTop: 4,
   },
   allButton: {
-    backgroundColor: colors.ink2,
-    borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderWidth: 0.5,
-    borderColor: colors.line,
+    backgroundColor: colors.ink2, borderRadius: 999,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 0.5, borderColor: colors.line,
   },
-  allButtonText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: colors.paper2,
-  },
-  horizontalScroll: {
-    paddingHorizontal: 20,
-    gap: 12,
-  },
-  curatedList: {
-    paddingHorizontal: 20,
-    gap: 10,
-  },
+  allButtonText: { fontSize: 12, fontWeight: '600', color: colors.paper2 },
+  horizontalScroll: { paddingHorizontal: 20, gap: 12 },
+  curatedList: { paddingHorizontal: 20, gap: 10 },
 });

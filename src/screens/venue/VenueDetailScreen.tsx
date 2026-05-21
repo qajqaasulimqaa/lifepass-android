@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,12 +7,14 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
-import { mockVenues } from '../../data/mockVenues';
+import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
+import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import type {
@@ -35,16 +37,35 @@ type Props = {
 };
 
 export default function VenueDetailScreen({ navigation, route }: Props) {
-  const venue = mockVenues.find((v) => v.id === route.params.venueId);
+  const { venueId } = route.params;
   const insets = useSafeAreaInsets();
-  const [isFavourite, setIsFavourite] = useState(false);
+
+  const { venue, loading: venueLoading } = useVenueById(venueId);
+  const { activities } = useActivities(venueId);
+  const { savedVenueIds, toggle } = useFavouriteVenues();
+
+  const isFavourite = venue ? savedVenueIds.includes(venue.id) : false;
+
+  // Merge loaded activities into the venue object for components that need venue.activities
+  const venueWithActivities: Venue | null = useMemo(() => {
+    if (!venue) return null;
+    return { ...venue, activities };
+  }, [venue, activities]);
 
   function openBooking(activityId: string) {
     if (!venue) return;
     navigation.navigate('BookingFlow', { venueId: venue.id, activityId });
   }
 
-  if (!venue) {
+  if (venueLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator color={colors.blue} />
+      </View>
+    );
+  }
+
+  if (!venueWithActivities) {
     return (
       <View style={styles.errorContainer}>
         <Ionicons name="alert-circle-outline" size={40} color={colors.paper3} />
@@ -64,28 +85,28 @@ export default function VenueDetailScreen({ navigation, route }: Props) {
         showsVerticalScrollIndicator={false}
       >
         <HeroBlock
-          venue={venue}
+          venue={venueWithActivities}
           insets={insets}
           isFavourite={isFavourite}
           onBack={navigation.goBack}
-          onToggleFavourite={() => setIsFavourite((v) => !v)}
+          onToggleFavourite={() => toggle(venueWithActivities.id)}
         />
 
         <View style={styles.detailContent}>
-          <MetaRow venue={venue} />
-          <Description text={venue.description} />
-          <AmenitiesBlock amenities={venue.amenities} />
-          <ActivitiesBlock venue={venue} onBook={openBooking} />
-          <OpeningHoursBlock hours={venue.openingHours} />
-          <ContactBlock venue={venue} />
-          <ReviewsBlock reviews={venue.reviews} />
+          <MetaRow venue={venueWithActivities} />
+          <Description text={venueWithActivities.description} />
+          <AmenitiesBlock amenities={venueWithActivities.amenities} />
+          <ActivitiesBlock venue={venueWithActivities} onBook={openBooking} />
+          <OpeningHoursBlock hours={venueWithActivities.openingHours} />
+          <ContactBlock venue={venueWithActivities} />
+          <ReviewsBlock reviews={venueWithActivities.reviews} />
         </View>
       </ScrollView>
 
       <FloatingAction
-        venue={venue}
+        venue={venueWithActivities}
         bottom={insets.bottom + 110}
-        onBook={() => venue.activities[0] && openBooking(venue.activities[0].id)}
+        onBook={() => venueWithActivities.activities[0] && openBooking(venueWithActivities.activities[0].id)}
       />
     </View>
   );
@@ -190,6 +211,7 @@ function MetaRow({ venue }: { venue: Venue }) {
 }
 
 function Description({ text }: { text: string }) {
+  if (!text) return null;
   return <Text style={styles.description}>{text}</Text>;
 }
 
@@ -335,11 +357,11 @@ function ContactBlock({ venue }: { venue: Venue }) {
     <View style={styles.section}>
       <SectionTitle title="Getting there" />
       <View style={contactStyles.container}>
-        <ContactRow icon="location-outline" text={venue.address} />
-        <ContactRow icon="call-outline" text={venue.phone} />
-        {venue.specialInstructions && (
+        {venue.address ? <ContactRow icon="location-outline" text={venue.address} /> : null}
+        {venue.phone ? <ContactRow icon="call-outline" text={venue.phone} /> : null}
+        {venue.specialInstructions ? (
           <ContactRow icon="information-circle-outline" text={venue.specialInstructions} />
-        )}
+        ) : null}
       </View>
     </View>
   );
@@ -467,6 +489,12 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 220 },
 
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   errorContainer: {
     flex: 1,
     backgroundColor: colors.ink,

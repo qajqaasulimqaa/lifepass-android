@@ -6,28 +6,43 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
-import { useAuthStore } from '../../stores/authStore';
-import { mockProfile, mockSubscription } from '../../data/mockAccount';
+import { useAuth } from '../../supabase/hooks/useAuth';
+import { useSubscription } from '../../supabase/hooks/useSubscription';
+import {
+  totalCredits,
+  hasLuxuryAccess,
+  planDisplayName,
+} from '../../supabase/types/subscription';
 import Kicker from '../../components/Kicker';
 
 export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
-  const setAuthenticated = useAuthStore((s) => s.setAuthenticated);
-  const [signOutLoading, setSignOutLoading] = useState(false);
+  const { user, signOut } = useAuth();
+  const { subscription, loading: subLoading } = useSubscription();
+  const [signingOut, setSigningOut] = useState(false);
 
-  const profile = mockProfile;
-  const subscription = mockSubscription;
-  const initial = profile.fullName.charAt(0).toUpperCase();
-  const daysLeft = Math.round(
-    (subscription.expiresAt.getTime() - Date.now()) / (24 * 60 * 60 * 1000)
-  );
+  const displayName: string =
+    user?.user_metadata?.full_name ?? user?.email ?? 'Account';
+  const email: string = user?.email ?? '';
+  const initial = displayName.charAt(0).toUpperCase();
+
+  const credits = subscription ? totalCredits(subscription) : 0;
+  const planName = subscription ? planDisplayName(subscription) : '—';
+  const luxuryAccess = subscription ? hasLuxuryAccess(subscription) : false;
+
+  const daysLeft = subscription?.expires_at
+    ? Math.max(0, Math.round(
+        (new Date(subscription.expires_at).getTime() - Date.now()) / (24 * 60 * 60 * 1000)
+      ))
+    : null;
 
   function handleSignOut() {
     Alert.alert('Sign out', 'Are you sure you want to sign out?', [
@@ -35,9 +50,15 @@ export default function AccountScreen() {
       {
         text: 'Sign out',
         style: 'destructive',
-        onPress: () => {
-          setSignOutLoading(true);
-          setTimeout(() => setAuthenticated(false), 200);
+        onPress: async () => {
+          setSigningOut(true);
+          try {
+            await signOut();
+            // RootNavigator reacts to onAuthStateChange automatically
+          } catch {
+            setSigningOut(false);
+            Alert.alert('Error', 'Could not sign out. Please try again.');
+          }
         },
       },
     ]);
@@ -49,8 +70,8 @@ export default function AccountScreen() {
       'This will permanently delete your account and all data. This cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => setAuthenticated(false) },
-      ]
+        { text: 'Delete', style: 'destructive', onPress: () => signOut() },
+      ],
     );
   }
 
@@ -87,38 +108,49 @@ export default function AccountScreen() {
             </View>
           </View>
 
-          <Text style={styles.name}>{profile.fullName}</Text>
-          <Text style={styles.email}>{profile.email}</Text>
+          <Text style={styles.name}>{displayName}</Text>
+          <Text style={styles.email}>{email}</Text>
         </View>
 
-        {/* Content */}
         <View style={styles.content}>
           {/* Subscription card */}
-          <View style={subStyles.card}>
-            <View style={subStyles.headerRow}>
-              <View style={{ flex: 1 }}>
-                <Kicker text="Active subscription" color={colors.paper3} />
-                <Text style={subStyles.planName}>{subscription.planDisplayName}</Text>
-                <Text style={subStyles.expiry}>
-                  Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'}
-                </Text>
-              </View>
-              <View style={subStyles.credits}>
-                <Text style={subStyles.creditsValue}>{subscription.totalCredits}</Text>
-                <Text style={subStyles.creditsLabel}>credits left</Text>
-              </View>
+          {subLoading ? (
+            <View style={subStyles.card}>
+              <ActivityIndicator color={colors.blue} />
             </View>
-
-            {subscription.hasLuxuryAccess && subscription.luxuryVisitCap !== null && (
-              <View style={subStyles.luxuryRow}>
-                <Ionicons name="sparkles" size={11} color={colors.skyBlue} />
-                <Text style={subStyles.luxuryText}>
-                  Luxury visits · {subscription.luxuryVisitsUsed}/{subscription.luxuryVisitCap}{' '}
-                  this month
-                </Text>
+          ) : subscription ? (
+            <View style={subStyles.card}>
+              <View style={subStyles.headerRow}>
+                <View style={{ flex: 1 }}>
+                  <Kicker text="Active subscription" color={colors.paper3} />
+                  <Text style={subStyles.planName}>{planName}</Text>
+                  {daysLeft !== null && (
+                    <Text style={subStyles.expiry}>
+                      Expires in {daysLeft} day{daysLeft === 1 ? '' : 's'}
+                    </Text>
+                  )}
+                </View>
+                <View style={subStyles.credits}>
+                  <Text style={subStyles.creditsValue}>{credits}</Text>
+                  <Text style={subStyles.creditsLabel}>credits left</Text>
+                </View>
               </View>
-            )}
-          </View>
+
+              {luxuryAccess && subscription.luxury_visit_cap != null && (
+                <View style={subStyles.luxuryRow}>
+                  <Ionicons name="sparkles" size={11} color={colors.skyBlue} />
+                  <Text style={subStyles.luxuryText}>
+                    Luxury visits · {subscription.luxury_visits_used ?? 0}/
+                    {subscription.luxury_visit_cap} this month
+                  </Text>
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={subStyles.card}>
+              <Text style={{ color: colors.paper3, fontSize: 14 }}>No active subscription.</Text>
+            </View>
+          )}
 
           {/* Menu */}
           <View style={styles.menu}>
@@ -131,7 +163,7 @@ export default function AccountScreen() {
           <View style={styles.actions}>
             <TouchableOpacity style={styles.actionRow} onPress={handleSignOut} activeOpacity={0.7}>
               <Ionicons name="log-out-outline" size={18} color={colors.paper} />
-              <Text style={styles.actionText}>{signOutLoading ? 'Signing out…' : 'Sign out'}</Text>
+              <Text style={styles.actionText}>{signingOut ? 'Signing out…' : 'Sign out'}</Text>
             </TouchableOpacity>
 
             <View style={styles.divider} />
@@ -180,81 +212,47 @@ function MenuRow({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
-
-  header: {
-    height: 320,
-    alignItems: 'center',
-    paddingBottom: 24,
-    overflow: 'hidden',
-  },
-  headerTopBar: {
-    width: '100%',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    alignItems: 'flex-start',
-  },
+  header: { height: 320, alignItems: 'center', paddingBottom: 24, overflow: 'hidden' },
+  headerTopBar: { width: '100%', paddingHorizontal: 16, paddingTop: 8, alignItems: 'flex-start' },
   backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 36, height: 36, borderRadius: 18,
     backgroundColor: 'rgba(15,23,42,0.3)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   avatarWrap: { marginTop: 'auto' },
   avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 80, height: 80, borderRadius: 40,
     backgroundColor: '#456231',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 3, borderColor: '#FFFFFF',
   },
   avatarInitial: { fontSize: 32, fontWeight: '700', color: '#FFFFFF' },
   name: { fontSize: 22, fontWeight: '700', color: '#FFFFFF', marginTop: 12 },
   email: { fontSize: 14, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
-
   content: { paddingHorizontal: 20, paddingTop: 24, gap: 24 },
-
   menu: {
-    backgroundColor: colors.ink2,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: colors.line,
-    overflow: 'hidden',
+    backgroundColor: colors.ink2, borderRadius: 14,
+    borderWidth: 0.5, borderColor: colors.line, overflow: 'hidden',
   },
-
   actions: {
-    backgroundColor: colors.ink2,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: colors.line,
-    overflow: 'hidden',
+    backgroundColor: colors.ink2, borderRadius: 14,
+    borderWidth: 0.5, borderColor: colors.line, overflow: 'hidden',
   },
   actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
   },
   actionText: { fontSize: 15, fontWeight: '500', color: colors.paper },
   divider: { height: 0.5, backgroundColor: colors.line, marginHorizontal: 16 },
-
   legal: { alignItems: 'center', gap: 10, paddingTop: 8 },
   legalLink: { fontSize: 13, color: colors.paper3 },
 });
 
 const subStyles = StyleSheet.create({
   card: {
-    padding: 16,
-    backgroundColor: colors.ink2,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: colors.line,
-    gap: 12,
+    padding: 16, backgroundColor: colors.ink2, borderRadius: 14,
+    borderWidth: 0.5, borderColor: colors.line, gap: 12,
+    minHeight: 80, justifyContent: 'center',
   },
   headerRow: { flexDirection: 'row', alignItems: 'flex-start' },
   planName: { fontSize: 17, fontWeight: '700', color: colors.paper, marginTop: 6 },
@@ -263,24 +261,17 @@ const subStyles = StyleSheet.create({
   creditsValue: { fontSize: 26, fontWeight: '700', color: colors.blue },
   creditsLabel: { fontSize: 11, color: colors.paper3 },
   luxuryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingTop: 10,
-    borderTopWidth: 0.5,
-    borderTopColor: colors.line,
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingTop: 10, borderTopWidth: 0.5, borderTopColor: colors.line,
   },
   luxuryText: { fontSize: 12, color: colors.skyBlue, fontWeight: '500' },
 });
 
 const menuStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.line,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 14,
+    borderBottomWidth: 0.5, borderBottomColor: colors.line,
   },
   icon: { width: 24 },
   title: { flex: 1, fontSize: 15, fontWeight: '500', color: colors.paper, marginLeft: 8 },

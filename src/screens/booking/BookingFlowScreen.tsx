@@ -1,16 +1,18 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
-import { mockVenues } from '../../data/mockVenues';
-import { mockSlotsForDate } from '../../data/mockAccount';
+import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
+import { fetchAvailableSlots, createBooking } from '../../supabase/services/bookings';
 import PrimaryButton from '../../components/PrimaryButton';
 import Kicker from '../../components/Kicker';
 import type { Activity, Venue } from '../../types/venue';
@@ -25,12 +27,16 @@ const STEPS = ['Date', 'Time', 'Confirm'] as const;
 export default function BookingFlowScreen({ route, navigation }: Props) {
   const insets = useSafeAreaInsets();
   const { venueId, activityId } = route.params;
-  const venue = mockVenues.find((v) => v.id === venueId);
-  const activity = venue?.activities.find((a) => a.id === activityId);
+
+  const { venue, loading: venueLoading } = useVenueById(venueId);
+  const { activities, loading: activitiesLoading } = useActivities(venueId);
+  const activity = activities.find((a) => a.id === activityId);
 
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<TimeSlot | null>(null);
+  const [slots, setSlots] = useState<TimeSlot[]>([]);
+  const [slotsLoading, setSlotsLoading] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
 
@@ -43,7 +49,32 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
     return days;
   }, []);
 
-  const slots = useMemo(() => mockSlotsForDate(selectedDate), [selectedDate]);
+  // Fetch availability slots when the user reaches the Time step (or changes date)
+  useEffect(() => {
+    if (step !== 1 || !activity) return;
+    setSlotsLoading(true);
+    setSelectedSlot(null);
+    fetchAvailableSlots(activity.id, selectedDate)
+      .then((dbSlots) => {
+        setSlots(
+          dbSlots.map((s) => ({
+            id: s.id,
+            startTime: new Date(s.start_time),
+            spotsRemaining: s.spots_remaining ?? undefined,
+          })),
+        );
+      })
+      .catch(() => setSlots([]))
+      .finally(() => setSlotsLoading(false));
+  }, [step, activity, selectedDate]);
+
+  if (venueLoading || activitiesLoading) {
+    return (
+      <View style={[styles.container, styles.center]}>
+        <ActivityIndicator color={colors.blue} />
+      </View>
+    );
+  }
 
   if (!venue || !activity) {
     return (
@@ -53,12 +84,22 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
     );
   }
 
-  function handleConfirm() {
+  async function handleConfirm() {
+    if (!selectedSlot || !activity) return;
     setConfirming(true);
-    setTimeout(() => {
-      setConfirming(false);
+    try {
+      // Build the full booking datetime from selected date + slot's time-of-day
+      const bookingTime = new Date(selectedSlot.startTime);
+      // credit_type derives from the activity's classification
+      const creditType = activity.classification === 'luxury' ? 'luxury' : 'basic';
+      await createBooking(activity.id, bookingTime, creditType);
       setConfirmed(true);
-    }, 600);
+    } catch (e) {
+      const message = e instanceof Error ? e.message : 'Could not create booking. Try again.';
+      Alert.alert('Booking failed', message);
+    } finally {
+      setConfirming(false);
+    }
   }
 
   if (confirmed) {
@@ -86,6 +127,7 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
       {step === 1 && (
         <TimeStep
           slots={slots}
+          loading={slotsLoading}
           selected={selectedSlot}
           onSelect={setSelectedSlot}
           onNext={() => setStep(2)}
@@ -184,11 +226,13 @@ function DateStep({
 
 function TimeStep({
   slots,
+  loading,
   selected,
   onSelect,
   onNext,
 }: {
   slots: TimeSlot[];
+  loading: boolean;
   selected: TimeSlot | null;
   onSelect: (s: TimeSlot) => void;
   onNext: () => void;
@@ -196,28 +240,38 @@ function TimeStep({
   return (
     <View style={stepStyles.container}>
       <Text style={stepStyles.heading}>Select a time</Text>
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={timeStyles.grid}>
-        {slots.map((slot) => {
-          const active = selected?.id === slot.id;
-          return (
-            <TouchableOpacity
-              key={slot.id}
-              style={[timeStyles.tile, active && timeStyles.tileActive]}
-              onPress={() => onSelect(slot)}
-              activeOpacity={0.85}
-            >
-              <Text style={[timeStyles.timeText, active && timeStyles.timeTextActive]}>
-                {slot.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
-              </Text>
-              {slot.spotsRemaining !== undefined && (
-                <Text style={[timeStyles.spots, active && timeStyles.spotsActive]}>
-                  {slot.spotsRemaining} left
+      {loading ? (
+        <View style={styles.center}>
+          <ActivityIndicator color={colors.blue} />
+        </View>
+      ) : slots.length === 0 ? (
+        <View style={styles.center}>
+          <Text style={styles.errorText}>No slots available for this date.</Text>
+        </View>
+      ) : (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={timeStyles.grid}>
+          {slots.map((slot) => {
+            const active = selected?.id === slot.id;
+            return (
+              <TouchableOpacity
+                key={slot.id}
+                style={[timeStyles.tile, active && timeStyles.tileActive]}
+                onPress={() => onSelect(slot)}
+                activeOpacity={0.85}
+              >
+                <Text style={[timeStyles.timeText, active && timeStyles.timeTextActive]}>
+                  {slot.startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
                 </Text>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+                {slot.spotsRemaining !== undefined && (
+                  <Text style={[timeStyles.spots, active && timeStyles.spotsActive]}>
+                    {slot.spotsRemaining} left
+                  </Text>
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
       <View style={stepStyles.footer}>
         <PrimaryButton title="Next" onPress={onNext} disabled={!selected} />
       </View>
@@ -324,6 +378,7 @@ function SuccessScreen({
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
+  center: { alignItems: 'center', justifyContent: 'center', flex: 1 },
   errorText: { color: colors.paper3, textAlign: 'center', marginTop: 80 },
 
   header: {

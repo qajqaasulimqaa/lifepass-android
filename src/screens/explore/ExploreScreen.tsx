@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
-  Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from 'react-native-maps';
@@ -16,15 +16,15 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExploreStackParamList } from '../../navigation/types';
-
-type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 import { colors } from '../../theme';
-import { mockVenues } from '../../data/mockVenues';
+import { useVenues } from '../../supabase/hooks/useVenues';
+import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { categoryFilters, matchesCategory } from '../../data/categories';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import type { Venue } from '../../types/venue';
 
+type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 type Presentation = 'map' | 'list';
 type ClassFilter = 'all' | 'basic' | 'luxury';
 
@@ -33,8 +33,6 @@ const CLASS_FILTERS: { id: ClassFilter; label: string }[] = [
   { id: 'basic', label: 'Basic' },
   { id: 'luxury', label: 'Luxury' },
 ];
-
-const STUB_CREDITS = 12;
 
 const REYKJAVIK = {
   latitude: 64.1466,
@@ -46,55 +44,57 @@ const REYKJAVIK = {
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
+  const { venues, loading } = useVenues();
+  const { credits } = useSubscription();
 
-  function openVenue(venueId: string) {
-    navigation.navigate('VenueDetail', { venueId });
-  }
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [presentation, setPresentation] = useState<Presentation>('list');
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
+  function openVenue(venueId: string) {
+    navigation.navigate('VenueDetail', { venueId });
+  }
+
+  // Client-side filtering — venues list is small enough
   const filtered = useMemo(() => {
-    return mockVenues.filter((v) => {
+    return venues.filter((v) => {
       if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (classFilter === 'basic' && v.classification === 'luxury') return false;
       if (classFilter === 'luxury' && v.classification !== 'luxury') return false;
       if (categoryFilter && !matchesCategory(v.category, categoryFilter)) return false;
       return true;
     });
-  }, [search, classFilter, categoryFilter]);
+  }, [venues, search, classFilter, categoryFilter]);
 
   function classCount(f: ClassFilter) {
-    return mockVenues.filter((v) =>
+    return venues.filter((v) =>
       f === 'all' ? true : f === 'luxury' ? v.classification === 'luxury' : v.classification !== 'luxury'
     ).length;
   }
 
   function categoryCount(filterId: string) {
-    return mockVenues.filter((v) => matchesCategory(v.category, filterId)).length;
+    return venues.filter((v) => matchesCategory(v.category, filterId)).length;
   }
 
   const selectedVenue = selectedVenueId
-    ? mockVenues.find((v) => v.id === selectedVenueId) ?? null
+    ? venues.find((v) => v.id === selectedVenueId) ?? null
     : null;
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <View>
-          <Text style={styles.wordmark}>
-            <Text style={styles.wordmarkLife}>Life</Text>
-            <Text style={styles.wordmarkPass}>Pass</Text>
-          </Text>
-        </View>
+        <Text style={styles.wordmark}>
+          <Text style={styles.wordmarkLife}>Life</Text>
+          <Text style={styles.wordmarkPass}>Pass</Text>
+        </Text>
         <View style={styles.topBarCenter}>
           <Kicker text="Explore" color={colors.paper2} />
           <Kicker text={`${filtered.length} venues`} color={colors.paper3} />
         </View>
-        <CreditPill credits={STUB_CREDITS} />
+        <CreditPill credits={credits} />
       </View>
 
       {/* Search + toggle */}
@@ -127,12 +127,8 @@ export default function ExploreScreen() {
               style={[styles.chip, selected && styles.chipSelected]}
               onPress={() => setClassFilter(f.id)}
             >
-              {f.id === 'luxury' && (
-                <View style={styles.luxuryDot} />
-              )}
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                {f.label}
-              </Text>
+              {f.id === 'luxury' && <View style={styles.luxuryDot} />}
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.label}</Text>
               <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
                 {classCount(f.id)}
               </Text>
@@ -154,7 +150,7 @@ export default function ExploreScreen() {
         >
           <Text style={[styles.chipText, !categoryFilter && styles.chipTextSelected]}>All</Text>
           <Text style={[styles.chipCount, !categoryFilter && styles.chipTextSelected]}>
-            {mockVenues.length}
+            {venues.length}
           </Text>
         </TouchableOpacity>
         {categoryFilters.map((f) => {
@@ -177,7 +173,11 @@ export default function ExploreScreen() {
       </ScrollView>
 
       {/* Content */}
-      {presentation === 'map' ? (
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator color={colors.blue} />
+        </View>
+      ) : presentation === 'map' ? (
         <View style={styles.mapContainer}>
           <MapView style={StyleSheet.absoluteFill} initialRegion={REYKJAVIK}>
             {filtered.map((venue) => (
@@ -215,7 +215,7 @@ export default function ExploreScreen() {
           keyExtractor={(v) => v.id}
           contentContainerStyle={styles.list}
           showsVerticalScrollIndicator={false}
-          ListHeaderComponent={<EditorialBanner />}
+          ListHeaderComponent={venues.length > 0 ? <EditorialBanner heroVenue={venues.find(v => v.classification === 'luxury') ?? venues[0]} /> : null}
           ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
           renderItem={({ item }) => (
             <TouchableOpacity activeOpacity={0.85} onPress={() => openVenue(item.id)}>
@@ -229,11 +229,10 @@ export default function ExploreScreen() {
   );
 }
 
-function EditorialBanner() {
-  const hero = mockVenues.find((v) => v.classification === 'luxury') ?? mockVenues[0];
+function EditorialBanner({ heroVenue }: { heroVenue: Venue }) {
   return (
     <View style={bannerStyles.container}>
-      <Image source={{ uri: hero.imageUrl }} style={bannerStyles.image} />
+      <Image source={{ uri: heroVenue.imageUrl }} style={bannerStyles.image} />
       <LinearGradient
         colors={['rgba(15,23,42,0.05)', 'rgba(15,23,42,0.90)']}
         locations={[0.4, 1.0]}
@@ -279,147 +278,77 @@ function ExploreListRow({ venue }: { venue: Venue }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
-
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 0.5,
-    borderBottomColor: colors.line,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 20, paddingVertical: 10,
+    borderBottomWidth: 0.5, borderBottomColor: colors.line,
     backgroundColor: colors.ink,
   },
   wordmark: { fontSize: 18 },
   wordmarkLife: { color: colors.paper, fontStyle: 'italic', fontWeight: '400' },
   wordmarkPass: { color: colors.paper, fontWeight: '700' },
   topBarCenter: { alignItems: 'center', gap: 2 },
-
-  searchRow: {
-    flexDirection: 'row',
-    gap: 10,
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 10,
-  },
+  searchRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 14, paddingBottom: 10 },
   searchField: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    height: 44,
-    paddingHorizontal: 14,
-    backgroundColor: colors.ink2,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: colors.line,
+    flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
+    height: 44, paddingHorizontal: 14,
+    backgroundColor: colors.ink2, borderRadius: 12,
+    borderWidth: 0.5, borderColor: colors.line,
   },
   searchIcon: { fontSize: 13 },
   searchInput: { flex: 1, fontSize: 14, color: colors.paper },
   toggleButton: {
-    width: 44,
-    height: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.ink2,
-    borderRadius: 12,
-    borderWidth: 0.5,
-    borderColor: colors.line,
+    width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: colors.ink2, borderRadius: 12,
+    borderWidth: 0.5, borderColor: colors.line,
   },
   toggleIcon: { fontSize: 18, color: colors.paper },
-
-  classChips: {
-    flexDirection: 'row',
-    gap: 6,
-    paddingHorizontal: 20,
-    paddingBottom: 6,
-  },
+  classChips: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, paddingBottom: 6 },
   categoryScroll: { marginBottom: 10 },
   categoryChips: { paddingHorizontal: 20, gap: 8, paddingVertical: 4 },
-
   chip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    backgroundColor: colors.ink2,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: colors.line,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: colors.ink2, borderRadius: 999,
+    borderWidth: 1, borderColor: colors.line,
   },
-  chipSelected: {
-    backgroundColor: colors.paper,
-    borderColor: colors.paper,
-  },
-  chipText: {
-    fontSize: 12.5,
-    fontWeight: '600',
-    color: colors.paper2,
-    letterSpacing: -0.1,
-  },
+  chipSelected: { backgroundColor: colors.paper, borderColor: colors.paper },
+  chipText: { fontSize: 12.5, fontWeight: '600', color: colors.paper2, letterSpacing: -0.1 },
   chipTextSelected: { color: colors.ink },
   chipCount: { fontSize: 11, color: colors.paper3, opacity: 0.8 },
   luxuryDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.skyBlue },
-
-  // Map
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   mapContainer: { flex: 1 },
   marker: { padding: 4 },
   markerSelected: { transform: [{ scale: 1.3 }] },
   markerPin: { fontSize: 24 },
   venuePopup: {
-    position: 'absolute',
-    bottom: 120,
-    left: 20,
-    right: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 12,
-    backgroundColor: colors.ink2,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: colors.line2,
+    position: 'absolute', bottom: 120, left: 20, right: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 12, backgroundColor: colors.ink2,
+    borderRadius: 14, borderWidth: 0.5, borderColor: colors.line2,
   },
   popupImage: { width: 56, height: 56, borderRadius: 8 },
   popupInfo: { flex: 1 },
   popupName: { fontSize: 14, fontWeight: '600', color: colors.paper },
   popupCity: { fontSize: 12, color: colors.paper3 },
   popupArrow: { fontSize: 14, color: colors.paper3 },
-
-  // List
   list: { paddingTop: 6, paddingHorizontal: 20 },
 });
 
 const bannerStyles = StyleSheet.create({
-  container: {
-    height: 180,
-    borderRadius: 16,
-    overflow: 'hidden',
-    marginBottom: 16,
-    justifyContent: 'flex-end',
-  },
+  container: { height: 180, borderRadius: 16, overflow: 'hidden', marginBottom: 16, justifyContent: 'flex-end' },
   image: { ...StyleSheet.absoluteFillObject },
   copy: { padding: 16, gap: 4 },
-  title: {
-    fontSize: 22,
-    fontWeight: '400',
-    color: colors.paper,
-    letterSpacing: -0.4,
-  },
+  title: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   italic: { fontStyle: 'italic' },
 });
 
 const rowStyles = StyleSheet.create({
   row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    padding: 10,
-    backgroundColor: colors.ink2,
-    borderRadius: 14,
-    borderWidth: 0.5,
-    borderColor: colors.line,
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    padding: 10, backgroundColor: colors.ink2,
+    borderRadius: 14, borderWidth: 0.5, borderColor: colors.line,
   },
   image: { width: 88, height: 88, borderRadius: 10 },
   info: { flex: 1, gap: 4 },
