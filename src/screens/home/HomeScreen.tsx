@@ -4,9 +4,11 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  TextInput,
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,6 +20,8 @@ import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
+import { useWeather } from '../../hooks/useWeather';
+import { weatherRecommendation } from '../../services/weather';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
@@ -48,6 +52,7 @@ export default function HomeScreen() {
   const { user } = useAuth();
   const { credits } = useSubscription();
   const { venues, loading } = useVenues();
+  const { weather } = useWeather();
 
   const greeting = getGreeting();
   const fullName: string = user?.user_metadata?.full_name ?? user?.email ?? '';
@@ -101,45 +106,69 @@ export default function HomeScreen() {
         <View style={[styles.heroInner, { paddingTop: insets.top + 12 }]}>
           {/* Top bar */}
           <View style={styles.topBar}>
-            <TouchableOpacity style={styles.avatar} onPress={openAccount}>
-              <Text style={styles.avatarInitial}>{initial}</Text>
-            </TouchableOpacity>
+            <Text style={styles.wordmark}>
+              <Text style={styles.wordmarkLife}>Life</Text>
+              <Text style={styles.wordmarkPass}>Pass</Text>
+            </Text>
 
-            <Kicker text="Today · Reykjavík" color={colors.paper2} />
-
-            <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
-              <CreditPill credits={credits} />
-            </TouchableOpacity>
+            <View style={styles.topBarRight}>
+              <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
+                <CreditPill credits={credits} />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.avatar} onPress={openAccount}>
+                <Text style={styles.avatarInitial}>{initial}</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Editorial copy */}
           <View style={styles.editorial}>
-            <Kicker text={greeting} color={colors.paper2} />
+            {/* Real weather row — replaces the old static tagline */}
+            {weather && (
+              <View style={styles.weatherRow}>
+                <Ionicons name={weather.icon} size={13} color={colors.paper2} />
+                <Text style={styles.weatherText}>
+                  {weather.condition} · {weather.temperature}° · {weatherRecommendation(weather)}
+                </Text>
+              </View>
+            )}
 
             <Text style={styles.greetingText}>
-              {greeting},{' '}
-              <Text style={styles.greetingName}>{firstName}.</Text>
-              {'\n'}
-              <Text style={styles.greetingTagline}>The sky is clearing.</Text>
+              {greeting}, <Text style={styles.greetingName}>{firstName}.</Text>
             </Text>
 
             {hero && (
-              <View style={styles.venueRow}>
-                <View>
-                  <Kicker text="Tonight's pick" color={colors.skyBlue} />
-                  <Text style={styles.venueName}>{hero.name}</Text>
-                  <Text style={styles.venueCity}>{hero.city}</Text>
+              <View style={styles.pickupCard}>
+                <Image source={{ uri: hero.imageUrl }} style={styles.pickupImage} />
+                <View style={styles.pickupText}>
+                  <Text style={styles.pickupKicker}>PICK UP WHERE YOU LEFT OFF</Text>
+                  <Text style={styles.pickupVenue} numberOfLines={1}>
+                    {hero.name}
+                  </Text>
+                  <Text style={styles.pickupSub} numberOfLines={1}>
+                    {hero.city}
+                  </Text>
                 </View>
-
-                <TouchableOpacity style={styles.bookButton} onPress={() => openVenue(hero.id)}>
+                <TouchableOpacity
+                  style={styles.bookButton}
+                  onPress={() => openVenue(hero.id)}
+                  activeOpacity={0.85}
+                >
                   <Text style={styles.bookButtonText}>
-                    Book · {hero.creditCost} cr →
+                    Book · {hero.creditCost} →
                   </Text>
                 </TouchableOpacity>
               </View>
             )}
           </View>
         </View>
+      </View>
+
+      {/* Try something new — links to Coach AI.
+          Lives directly under the hero so users see it first. Doesn't
+          depend on venue data so it renders even while shelves are loading. */}
+      <View style={styles.tryNewWrap}>
+        <TryNewSection onPromptSelected={(prompt) => openCoach(prompt)} />
       </View>
 
       {/* Shelves */}
@@ -176,12 +205,6 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Try something new — links to Coach AI */}
-          <TryNewSection
-            onCategoryPress={(cat) => openCoach(cat.prompt)}
-            onHelpPress={() => openCoach('I want to try something new — what do you suggest?')}
-          />
-
           {/* Curated */}
           {curated.length > 0 && (
             <View style={styles.shelf}>
@@ -211,13 +234,35 @@ export default function HomeScreen() {
 
 // ─── Try-Something-New section ────────────────────────────────────────────────
 
+// Quick-tap prompts shown in the AskCard. Each chip's `prompt` is what
+// gets sent to Coach when tapped.
+const ASK_CHIPS: { label: string; prompt: string }[] = [
+  { label: 'Quiet evening', prompt: 'Suggest a quiet, relaxing evening for me.' },
+  { label: '30 min sweat', prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
+  { label: 'Try something new', prompt: 'I want to try something new — what do you suggest?' },
+  { label: 'After work', prompt: "It's after 6pm. What's a good way to wind down nearby?" },
+  { label: 'Lagoon enthusiast', prompt: 'I love geothermal pools — suggest the best lagoon or thermal bath experience available on LifePass.' },
+  { label: 'Visiting Reykjavík', prompt: "I'm a tourist visiting Reykjavík — what wellness experiences should I absolutely not miss?" },
+];
+
+const ASK_EXAMPLE = '"Find me a quiet 45-minute swim near work after 6pm"';
+
 function TryNewSection({
-  onCategoryPress,
-  onHelpPress,
+  onPromptSelected,
 }: {
-  onCategoryPress: (category: CoachCategory) => void;
-  onHelpPress: () => void;
+  onPromptSelected: (prompt: string) => void;
 }) {
+  const [inputText, setInputText] = useState('');
+
+  function handleSend() {
+    const text = inputText.trim();
+    if (!text) return;
+    setInputText('');
+    onPromptSelected(text);
+  }
+
+  const canSend = inputText.trim().length > 0;
+
   return (
     <View style={trySection.container}>
       <Text style={trySection.heading}>
@@ -234,23 +279,54 @@ function TryNewSection({
           <TouchableOpacity
             key={cat.id}
             style={trySection.card}
-            onPress={() => onCategoryPress(cat)}
+            onPress={() => onPromptSelected(cat.prompt)}
             activeOpacity={0.85}
           >
-            <Image source={{ uri: cat.imageUrl }} style={trySection.cardImage} />
+            <Image source={cat.image} style={trySection.cardImage} />
             <Text style={trySection.cardLabel} numberOfLines={2}>{cat.label}</Text>
           </TouchableOpacity>
         ))}
       </ScrollView>
 
-      <TouchableOpacity
-        style={trySection.cta}
-        onPress={onHelpPress}
-        activeOpacity={0.85}
-      >
-        <Text style={trySection.ctaText}>Let me help!</Text>
-        <Ionicons name="arrow-forward" size={16} color={colors.ink} />
-      </TouchableOpacity>
+      {/* Ask card — free-text input + quick chips */}
+      <View style={askCard.container}>
+        {/* Input row */}
+        <View style={askCard.inputRow}>
+          <TextInput
+            style={askCard.input}
+            value={inputText}
+            onChangeText={setInputText}
+            placeholder={ASK_EXAMPLE}
+            placeholderTextColor="rgba(255,255,255,0.28)"
+            returnKeyType="send"
+            onSubmitEditing={handleSend}
+            blurOnSubmit={false}
+            multiline={false}
+          />
+          <TouchableOpacity
+            style={[askCard.sendBtn, canSend && askCard.sendBtnActive]}
+            onPress={handleSend}
+            activeOpacity={0.75}
+            disabled={!canSend}
+          >
+            <Ionicons name="arrow-up" size={16} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Quick chips */}
+        <View style={askCard.chips}>
+          {ASK_CHIPS.map((chip) => (
+            <TouchableOpacity
+              key={chip.label}
+              style={askCard.chip}
+              onPress={() => onPromptSelected(chip.prompt)}
+              activeOpacity={0.8}
+            >
+              <Text style={askCard.chipText}>{chip.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
     </View>
   );
 }
@@ -277,14 +353,14 @@ const trySection = StyleSheet.create({
     paddingVertical: 4,
   },
   card: {
-    width: 96,
+    width: 110,
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
   cardImage: {
-    width: 88,
-    height: 88,
-    borderRadius: 44,
+    width: 100,
+    height: 100,
+    borderRadius: 16,
     backgroundColor: colors.ink3,
   },
   cardLabel: {
@@ -294,22 +370,65 @@ const trySection = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 15,
   },
-  cta: {
+});
+
+// ─── Ask-card (example query + tappable chips) ────────────────────────────────
+
+const askCard = StyleSheet.create({
+  container: {
+    padding: 14,
+    backgroundColor: colors.ink2,
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: colors.line2,
+    gap: 12,
+    marginTop: 4,
+  },
+  inputRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    alignSelf: 'center',
-    paddingHorizontal: 28,
-    paddingVertical: 14,
-    backgroundColor: colors.paper,
-    borderRadius: 999,
-    minWidth: 220,
+    gap: 10,
   },
-  ctaText: {
+  input: {
+    flex: 1,
     fontSize: 14,
-    fontWeight: '700',
-    color: colors.ink,
+    color: colors.paper,
+    fontStyle: 'italic',
+    letterSpacing: -0.2,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+  },
+  sendBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(168,216,240,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,240,0.25)',
+  },
+  sendBtnActive: {
+    backgroundColor: colors.blue,
+    borderColor: colors.blue,
+  },
+  chips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  chip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,240,0.5)',
+    backgroundColor: 'rgba(168,216,240,0.06)',
+  },
+  chipText: {
+    fontSize: 13,
+    fontWeight: '500',
+    color: colors.skyBlue,
     letterSpacing: -0.1,
   },
 });
@@ -329,39 +448,80 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  wordmark: { fontSize: 22 },
+  wordmarkLife: { color: colors.paper, fontWeight: '600' },
+  wordmarkPass: { color: colors.paper, fontStyle: 'italic', fontWeight: '400' },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
-    backgroundColor: colors.ink3,
+    // Frosted glass — matches the credit pill.
+    backgroundColor: 'rgba(20, 33, 57, 0.55)',
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: colors.line2,
+    borderWidth: 0.5, borderColor: 'rgba(255, 255, 255, 0.18)',
   },
-  avatarInitial: { fontSize: 16, fontWeight: '600', color: colors.paper },
+  avatarInitial: { fontSize: 15, fontWeight: '600', color: colors.paper, fontStyle: 'italic' },
   editorial: { paddingBottom: 28, gap: 14 },
+  weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  weatherText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: colors.paper2,
+    letterSpacing: 1.0,
+  },
   greetingText: {
     fontSize: 36, fontWeight: '400', color: colors.paper,
     letterSpacing: -1.2, lineHeight: 44,
   },
-  greetingName: { color: colors.paper },
-  greetingTagline: { color: colors.paper2, fontStyle: 'italic' },
-  venueRow: {
+  greetingName: { color: colors.paper, fontStyle: 'italic' },
+  // Pickup card — glass section with thumbnail + venue info + book button.
+  pickupCard: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    padding: 10,
+    backgroundColor: 'rgba(20, 33, 57, 0.55)',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.15)',
   },
-  venueName: {
-    fontSize: 24, fontWeight: '400', color: colors.paper,
-    letterSpacing: -0.6, marginTop: 6,
+  pickupImage: {
+    width: 60, height: 60,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.05)',
   },
-  venueCity: { fontSize: 16, fontStyle: 'italic', color: colors.paper2 },
+  pickupText: { flex: 1, gap: 2 },
+  pickupKicker: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: colors.paper3,
+    letterSpacing: 1.0,
+    marginBottom: 2,
+  },
+  pickupVenue: {
+    fontSize: 17,
+    fontWeight: '500',
+    fontStyle: 'italic',
+    color: colors.paper,
+    letterSpacing: -0.3,
+  },
+  pickupSub: {
+    fontSize: 12,
+    color: colors.paper2,
+  },
   bookButton: {
-    backgroundColor: colors.paper, borderRadius: 999,
-    paddingHorizontal: 18, height: 44,
+    backgroundColor: 'rgba(0, 136, 255, 0.55)',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    height: 40,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 0.5,
+    borderColor: 'rgba(168, 216, 240, 0.35)',
   },
-  bookButtonText: { fontSize: 13, fontWeight: '700', color: colors.ink },
+  bookButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   loadingContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60,
   },
+  tryNewWrap: { paddingTop: 24, paddingBottom: 8 },
   shelves: { paddingTop: 12, gap: 32 },
   shelf: { gap: 14 },
   shelfHeader: {

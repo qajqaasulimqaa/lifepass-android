@@ -21,7 +21,7 @@
 // ────────────────────────────────────────────────────────────────────────────
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MODEL = 'claude-sonnet-4-5';
+const MODEL = 'claude-haiku-4-5';
 const MAX_TOKENS = 1024;
 
 const SYSTEM_PROMPT = `You are LifePass Coach — an AI wellness companion inside an Icelandic wellness app.

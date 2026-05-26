@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { colors } from '../theme';
 import WaveIcon from '../components/WaveIcon';
+import ProfileIcon from '../components/ProfileIcon';
 
 type TabConfig = {
   routeName: 'Home' | 'Explore' | 'CheckIn' | 'Coach' | 'Bookings';
@@ -26,7 +27,11 @@ const RIGHT_TABS: TabConfig[] = [
     label: 'Coach',
     renderIcon: (color, size) => <WaveIcon size={size} color={color} />,
   },
-  { routeName: 'Bookings', label: 'Library', icon: 'bookmark-outline' },
+  {
+    routeName: 'Bookings',
+    label: 'Profile',
+    renderIcon: (color, size) => <ProfileIcon size={size} color={color} />,
+  },
 ];
 
 const BAR_HEIGHT = 76;

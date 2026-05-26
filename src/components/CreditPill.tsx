@@ -19,13 +19,14 @@ const styles = StyleSheet.create({
   pill: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    gap: 4,
-    paddingHorizontal: 11,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(168,216,240,0.10)',
+    gap: 5,
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    // Frosted glass look — dark translucent body, faint light border.
+    backgroundColor: 'rgba(20, 33, 57, 0.55)',
     borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(168,216,240,0.20)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(255, 255, 255, 0.18)',
   },
   pillCompact: {
     paddingHorizontal: 10,
