@@ -6,6 +6,8 @@ import {
   ScrollView,
   Image,
   TouchableOpacity,
+  TouchableWithoutFeedback,
+  Pressable,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -43,6 +45,7 @@ import QuestionBubbleMessage from './QuestionBubbleMessage';
 
 let idCounter = 100;
 const nextId = () => String(++idCounter);
+
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
@@ -291,21 +294,8 @@ export default function CoachScreen() {
     callAI([...messages, userMsg]);
   }
 
-  function handleOtherIdeas(_searchQuery: string, _category: string) {
-    // Append an inline category picker so the user can pick a new category
-    // without losing the existing conversation
-    setMessages((m) => [
-      ...m,
-      {
-        id: nextId(),
-        role: 'assistant',
-        text: 'What else can I help you find?',
-        categoryPicker: true,
-        categoryPickerAnswered: false,
-        createdAt: new Date(),
-      },
-    ]);
-    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  function handleOtherIdeas(searchQuery: string, category: string) {
+    send(`Show me other ${searchQuery || category} options in Iceland`);
   }
 
   function handleBook(venue: VenueCard) {
@@ -362,6 +352,7 @@ export default function CoachScreen() {
       style={styles.root}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
     >
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ImageBackground
         source={require('../../../assets/bg-chat.jpg')}
         style={styles.bg}
@@ -381,7 +372,7 @@ export default function CoachScreen() {
             <Ionicons name="menu-outline" size={26} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Text style={styles.screenTitle}>AI Assistant</Text>
+          <Text style={styles.screenTitle}>Your Wellness Coach</Text>
           <View style={{ width: 42 }} />
         </View>
 
@@ -405,22 +396,6 @@ export default function CoachScreen() {
                     onOtherIdeas={handleOtherIdeas}
                     onBook={handleBook}
                   />
-                ) : m.categoryPicker ? (
-                  <InlineCategoryPicker
-                    key={m.id}
-                    intro={m.text}
-                    answered={!!m.categoryPickerAnswered}
-                    onSelect={(prompt) => {
-                      // Mark this picker as answered
-                      setMessages((msgs) =>
-                        msgs.map((msg) =>
-                          msg.id === m.id ? { ...msg, categoryPickerAnswered: true } : msg,
-                        ),
-                      );
-                      // Route through send() so detectVenueCategory picks the right Q&A flow
-                      send(prompt);
-                    }}
-                  />
                 ) : m.questionOptions && m.questionOptions.length > 0 ? (
                   <QuestionBubbleMessage
                     key={m.id}
@@ -438,19 +413,21 @@ export default function CoachScreen() {
             </ScrollView>
           ) : (
             <>
-              {/* Empty state: heading centred */}
-              <View style={styles.headingContainer}>
+              {/* Heading pinned near top */}
+              <Pressable style={styles.headingContainer} onPress={Keyboard.dismiss}>
                 <Text style={styles.heading}>{contextHeading}</Text>
-              </View>
+              </Pressable>
+              {/* Flex spacer pushes chips as far down as possible */}
+              <View style={{ flex: 1 }} />
               <SuggestionChips chips={chips} onSelect={send} />
             </>
           )}
 
-          {/* Category strip — hidden while keyboard is open or once chat has started */}
-          {!keyboardVisible && !hasStartedChat && CategoryStrip}
+          {/* Category strip — only in empty state, hidden while keyboard is open */}
+          {!hasStartedChat && !keyboardVisible && CategoryStrip}
 
           {/* ── Input bar ── */}
-          <View style={[styles.inputBar, { paddingBottom: keyboardVisible ? insets.bottom + 8 : insets.bottom + 84 }]}>
+          <View style={[styles.inputBar, { paddingBottom: keyboardVisible ? insets.bottom + 8 : insets.bottom + 104 }]}>
             <TextInput
               value={input}
               onChangeText={setInput}
@@ -480,6 +457,7 @@ export default function CoachScreen() {
           </View>
         </View>
       </ImageBackground>
+      </TouchableWithoutFeedback>
 
       <ChatDrawer
         visible={drawerOpen}
@@ -490,88 +468,6 @@ export default function CoachScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-// ─── Inline category picker ───────────────────────────────────────────────────
-
-function InlineCategoryPicker({
-  intro,
-  answered,
-  onSelect,
-}: {
-  intro: string;
-  answered: boolean;
-  onSelect: (prompt: string) => void;
-}) {
-  return (
-    <View style={picker.root}>
-      {/* Assistant bubble with intro text */}
-      <View style={picker.row}>
-        <View style={picker.avatar}>
-          <WaveIcon size={12} color={colors.skyBlue} />
-        </View>
-        <View style={picker.bubble}>
-          <Text style={picker.introText}>{intro}</Text>
-        </View>
-      </View>
-
-      {/* Category tiles */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={picker.scroll}
-        scrollEnabled={!answered}
-      >
-        {coachCategories.map((cat) => (
-          <TouchableOpacity
-            key={cat.id}
-            style={[picker.card, answered && picker.cardDimmed]}
-            onPress={() => !answered && onSelect(cat.prompt)}
-            activeOpacity={answered ? 1 : 0.85}
-            disabled={answered}
-          >
-            <Image source={cat.image} style={picker.cardImage} />
-            <Text style={picker.cardLabel} numberOfLines={2}>{cat.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
-    </View>
-  );
-}
-
-const picker = StyleSheet.create({
-  root: { gap: 10 },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 8,
-    paddingHorizontal: 16,
-  },
-  avatar: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: 'rgba(168,216,240,0.15)',
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-  bubble: {
-    maxWidth: '82%',
-    paddingHorizontal: 13, paddingVertical: 9,
-    borderRadius: 16, borderTopLeftRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.09)',
-    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.13)',
-  },
-  introText: { fontSize: 14, color: colors.paper, lineHeight: 20 },
-  scroll: { gap: 12, paddingHorizontal: 16, paddingVertical: 6 },
-  card: { width: 96, alignItems: 'center', gap: 8 },
-  cardDimmed: { opacity: 0.4 },
-  cardImage: {
-    width: 84, height: 84, borderRadius: 16,
-    backgroundColor: colors.ink3,
-  },
-  cardLabel: {
-    fontSize: 12, fontWeight: '500',
-    color: colors.paper2, textAlign: 'center', lineHeight: 15,
-  },
-});
 
 // ─── Message bubble ────────────────────────────────────────────────────────────
 
@@ -646,10 +542,10 @@ const styles = StyleSheet.create({
   },
 
   headingContainer: {
-    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 32,
+    paddingTop: 48,
+    marginBottom:100,
   },
   heading: {
     fontSize: 36,
@@ -668,7 +564,6 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 10,
     paddingHorizontal: 16,
-    paddingTop: 10,
   },
   input: {
     flex: 1,
@@ -697,20 +592,19 @@ const styles = StyleSheet.create({
 
   // Category image strip — pinned just above input bar
   categoryScroll: {
-    gap: 14,
+    gap: 12,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 6,
   },
   categoryCard: {
-    width: 96,
+    width: 92,
     alignItems: 'center',
-    gap: 8,
+    gap: 6,
   },
   categoryImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 16,
+    width: 82,
+    height: 62,
+    borderRadius: 12,
     backgroundColor: colors.ink3,
   },
   categoryLabel: {
@@ -718,7 +612,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.paper2,
     textAlign: 'center',
-    lineHeight: 15,
+    lineHeight: 13,
   },
 });
 

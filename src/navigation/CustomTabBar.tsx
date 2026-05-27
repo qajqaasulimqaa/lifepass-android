@@ -12,8 +12,8 @@ type TabConfig = {
   label: string;
   /** Standard Ionicons name. If omitted, renderIcon must be provided. */
   icon?: keyof typeof Ionicons.glyphMap;
-  /** Custom icon renderer — receives (color, size) */
-  renderIcon?: (color: string, size: number) => React.ReactNode;
+  /** Custom icon renderer — receives (color, size, isActive) */
+  renderIcon?: (color: string, size: number, isActive: boolean) => React.ReactNode;
 };
 
 const LEFT_TABS: TabConfig[] = [
@@ -25,12 +25,16 @@ const RIGHT_TABS: TabConfig[] = [
   {
     routeName: 'Coach',
     label: 'Coach',
-    renderIcon: (color, size) => <WaveIcon size={size} color={color} />,
+    renderIcon: (color, size, isActive) => (
+      <WaveIcon size={size} color={color} strokeWidth={isActive ? 2.2 : 1.5} />
+    ),
   },
   {
     routeName: 'Bookings',
     label: 'Profile',
-    renderIcon: (color, size) => <ProfileIcon size={size} color={color} />,
+    renderIcon: (color, size, isActive) => (
+      <ProfileIcon size={size} color={color} strokeWidth={isActive ? 2.2 : 1.5} />
+    ),
   },
 ];
 
@@ -106,12 +110,12 @@ function TabButton({
 
   function renderIcon() {
     if (tab.renderIcon) {
-      return tab.renderIcon(color, 22);
+      return tab.renderIcon(color, 22, isActive);
     }
     const iconName: keyof typeof Ionicons.glyphMap = isActive
       ? (String(tab.icon).replace('-outline', '') as keyof typeof Ionicons.glyphMap)
       : (tab.icon as keyof typeof Ionicons.glyphMap);
-    return <Ionicons name={iconName} size={22} color={color} />;
+    return <Ionicons name={iconName} size={24} color={color} />;
   }
 
   return (
@@ -154,13 +158,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-  },
-  hairline: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    height: 0.5,
-    backgroundColor: colors.line,
   },
   row: {
     flexDirection: 'row',

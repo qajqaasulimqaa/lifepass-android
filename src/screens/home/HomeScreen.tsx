@@ -7,7 +7,10 @@ import {
   TextInput,
   StyleSheet,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+
+const SCREEN_WIDTH = Dimensions.get('window').width;
 import { useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -39,7 +42,7 @@ type Nav = CompositeNavigationProp<
   BottomTabNavigationProp<TabParamList>
 >;
 
-const HERO_HEIGHT = 520;
+const HERO_HEIGHT = 370;
 
 function getGreeting(): string {
   const hour = new Date().getHours();
@@ -47,6 +50,18 @@ function getGreeting(): string {
   if (hour >= 12 && hour < 17) return 'Good afternoon';
   if (hour >= 17 && hour < 22) return 'Good evening';
   return 'Good night';
+}
+
+function formatBookingTime(date: Date): string {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const bookingDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const time = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+  if (bookingDay.getTime() === today.getTime()) return `Today · ${time}`;
+  if (bookingDay.getTime() === tomorrow.getTime()) return `Tomorrow · ${time}`;
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' }) + ` · ${time}`;
 }
 
 export default function HomeScreen() {
@@ -65,6 +80,11 @@ export default function HomeScreen() {
   // "Most popular now" = saved venues if the user has any, else fall back to curated list (max 4)
   const popularVenues = (savedVenues.length > 0 ? savedVenues : venues.slice(1)).slice(0, 4);
 
+  // Next upcoming booking — sorted by bookingTime ascending
+  const nextBooking = upcomingBookings
+    .slice()
+    .sort((a, b) => a.bookingTime.getTime() - b.bookingTime.getTime())[0] ?? null;
+
   const greeting = getGreeting();
   const fullName: string = user?.user_metadata?.full_name ?? user?.email ?? '';
   const firstName = fullName.split(' ')[0] || 'there';
@@ -79,6 +99,10 @@ export default function HomeScreen() {
 
   function openAccount() {
     navigation.navigate('Account');
+  }
+
+  function openExplore() {
+    navigation.navigate('Explore' as never);
   }
 
   function openCoach(prefilledMessage?: string) {
@@ -96,11 +120,11 @@ export default function HomeScreen() {
     >
       {/* Hero */}
       <View style={styles.heroContainer}>
-        {hero ? (
-          <Image source={{ uri: hero.imageUrl }} style={styles.heroImage} />
-        ) : (
-          <View style={[styles.heroImage, { backgroundColor: colors.ink2 }]} />
-        )}
+        <Image
+          source={require('../../../assets/hero.png')}
+          style={styles.heroImage}
+          resizeMode="cover"
+        />
 
         <LinearGradient
           colors={[
@@ -150,28 +174,36 @@ export default function HomeScreen() {
               <Text style={styles.activityTagline}>{activityTagline}</Text>
             ) : null}
 
-            {hero && (
-              <View style={styles.pickupCard}>
-                <Image source={{ uri: hero.imageUrl }} style={styles.pickupImage} />
+            {nextBooking ? (
+              <TouchableOpacity
+                style={styles.pickupCard}
+                onPress={() => openVenue(nextBooking.venueId)}
+                activeOpacity={0.85}
+              >
+                <Image source={{ uri: nextBooking.venueImageUrl }} style={styles.pickupImage} />
                 <View style={styles.pickupText}>
-                  <Text style={styles.pickupKicker}>PICK UP WHERE YOU LEFT OFF</Text>
+                  <Text style={styles.pickupKicker}>UPCOMING SESSION</Text>
                   <Text style={styles.pickupVenue} numberOfLines={1}>
-                    {hero.name}
+                    {nextBooking.venueName}
                   </Text>
                   <Text style={styles.pickupSub} numberOfLines={1}>
-                    {hero.city}
+                    {formatBookingTime(nextBooking.bookingTime)}
                   </Text>
                 </View>
-                <TouchableOpacity
-                  style={styles.bookButton}
-                  onPress={() => openVenue(hero.id)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.bookButtonText}>
-                    Book · {hero.creditCost} →
-                  </Text>
-                </TouchableOpacity>
-              </View>
+                <View style={styles.bookButton}>
+                  <Text style={styles.bookButtonText}>View →</Text>
+                </View>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                style={styles.bookNowCard}
+                onPress={openExplore}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="calendar-outline" size={18} color={colors.skyBlue} />
+                <Text style={styles.bookNowText}>No upcoming sessions — browse &amp; book</Text>
+                <Ionicons name="arrow-forward" size={16} color={colors.skyBlue} />
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -460,8 +492,19 @@ const askCard = StyleSheet.create({
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.ink },
   content: { flexGrow: 1 },
-  heroContainer: { height: HERO_HEIGHT },
-  heroImage: { ...StyleSheet.absoluteFillObject },
+  heroContainer: {
+    height: HERO_HEIGHT,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: 'hidden',
+  },
+  heroImage: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: SCREEN_WIDTH * 1.4, // wider than screen, anchored left so both people are visible
+  },
   heroInner: {
     flex: 1,
     paddingHorizontal: 20,
@@ -548,6 +591,23 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(168, 216, 240, 0.35)',
   },
   bookButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
+  bookNowCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 14,
+    backgroundColor: 'rgba(20, 33, 57, 0.55)',
+    borderRadius: 16,
+    borderWidth: 0.5,
+    borderColor: 'rgba(168, 216, 240, 0.25)',
+  },
+  bookNowText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: colors.paper2,
+    letterSpacing: -0.2,
+  },
   loadingContainer: {
     flex: 1, alignItems: 'center', justifyContent: 'center', paddingTop: 60,
   },

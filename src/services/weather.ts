@@ -66,9 +66,22 @@ export function weatherRecommendation(weather: WeatherSnapshot): string {
   if (icon === 'thunderstorm') return 'STAY IN — SAUNA DAY';
   if (icon === 'snow') return 'HOT SPRING WEATHER';
   if (icon === 'rainy') return 'LAGOON WEATHER';
-  if (icon === 'sunny' && temperature >= 15) return 'PERFECT FOR OUTDOORS';
-  if (icon === 'sunny' && temperature >= 5) return 'OUTDOOR POOL WEATHER';
-  if (temperature < 0) return 'HOT SPRING WEATHER';
-  if (temperature < 5) return 'INDOOR & SAUNA DAY';
-  return 'GREAT DAY TO MOVE';
+
+  if (icon === 'sunny') {
+    if (temperature >= 15) return 'PERFECT FOR OUTDOORS';
+    if (temperature >= 5)  return 'OUTDOOR POOL WEATHER';
+    return 'HOT SPRING WEATHER';
+  }
+
+  if (icon === 'partly-sunny') {
+    if (temperature >= 10) return 'OUTDOOR POOL WEATHER';
+    if (temperature >= 5)  return 'SPA & HOT SPRING DAY';
+    return 'HOT SPRING WEATHER';
+  }
+
+  // cloudy / foggy — the most common Reykjavík conditions
+  if (temperature >= 10) return 'INDOOR POOL WEATHER';
+  if (temperature >= 5)  return 'SPA & SAUNA WEATHER';
+  if (temperature < 0)   return 'HOT SPRING WEATHER';
+  return 'INDOOR & SAUNA DAY';
 }
