@@ -88,6 +88,90 @@ export async function fetchVenues(opts?: {
   return (data as DbVenue[]).map(adaptVenue);
 }
 
+// ── Coach Q&A → real DB venues ────────────────────────────────────────────────
+
+// Maps Q&A category key → DB category tags (any overlap = match)
+const CATEGORY_TAGS: Record<string, string[]> = {
+  gym:       ['Fitness', 'Gym'],
+  lagoon:    ['Lagoon', 'Wellness'],
+  yoga:      ['Yoga', 'Fitness', 'Pilates'],
+  swimming:  ['Swimming', 'Pool'],
+  spa:       ['Wellness', 'Spa', 'Sauna'],
+};
+
+// Maps region chip value → DB city names (used with Supabase .in())
+const REGION_CITIES: Record<string, string[]> = {
+  south: ['Reykjavík', 'Kópavogur', 'Hafnarfjörður', 'Garðabær', 'Mosfellsbær',
+          'Keflavík', 'Selfoss', 'Hveragerði', 'Vík', 'Grindavík'],
+  north: ['Akureyri', 'Húsavík', 'Sauðárkrókur', 'Dalvík', 'Siglufjörður'],
+  east:  ['Egilsstaðir', 'Eskifjörður', 'Neskaupstaður', 'Seyðisfjörður'],
+  west:  ['Borgarnes', 'Akranes', 'Ísafjörður', 'Stykkishólmur', 'Snæfellsbær'],
+};
+
+// Haversine great-circle distance in km
+function haversineKm(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number,
+): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * (Math.PI / 180)) *
+    Math.cos(lat2 * (Math.PI / 180)) *
+    Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+export async function fetchVenuesByCoachQuery(
+  category: string,
+  locationAnswer: string,
+  userCoords?: { latitude: number; longitude: number },
+): Promise<Venue[]> {
+  const tags = CATEGORY_TAGS[category] ?? [];
+  const isCloseby = locationAnswer === '__closeby__';
+
+  let query = supabase
+    .from('venues')
+    .select('*')
+    .eq('is_active', true);
+
+  // Supabase `.overlaps` = array has at least one element in common
+  if (tags.length > 0) {
+    query = query.overlaps('category', tags);
+  }
+
+  if (!isCloseby) {
+    const cities = REGION_CITIES[locationAnswer];
+    if (cities && cities.length > 0) {
+      query = query.in('city', cities);
+    }
+    // 'anywhere' or unrecognised value → no city filter
+  }
+
+  // Fetch more when we'll sort by proximity so we have enough to trim from
+  const fetchLimit = isCloseby ? 20 : 4;
+  const { data, error } = await query
+    .order('display_order', { ascending: true })
+    .limit(fetchLimit);
+
+  if (error) throw error;
+  const venues = (data as DbVenue[]).map(adaptVenue);
+
+  // When "Close by" selected: sort by Haversine distance, return nearest 4
+  if (isCloseby && userCoords) {
+    venues.sort((a, b) => {
+      const da = haversineKm(userCoords.latitude, userCoords.longitude, a.latitude, a.longitude);
+      const db = haversineKm(userCoords.latitude, userCoords.longitude, b.latitude, b.longitude);
+      return da - db;
+    });
+    return venues.slice(0, 4);
+  }
+
+  return venues;
+}
+
 export async function fetchVenueById(id: string): Promise<Venue> {
   const { data, error } = await supabase
     .from('venues')

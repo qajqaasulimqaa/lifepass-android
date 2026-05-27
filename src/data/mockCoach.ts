@@ -28,8 +28,8 @@ export const mockCoachMessages: ChatMessage[] = [
   {
     id: 'm1',
     role: 'assistant',
-    text: "Hi Kaja — I'm your LifePass coach. I can help you plan your week, suggest classes near you, or build a recovery routine. What's on your mind?",
-    createdAt: minutesAgo(8),
+    text: "Hi — I'm your LifePass coach. Ask me about venues near you, or tap a suggestion below.",
+    createdAt: minutesAgo(1),
   },
 ];
 
@@ -50,39 +50,39 @@ export const chipBank: SuggestionChip[] = [
   },
   {
     id: 'c3',
-    text: 'Lagoon ritual',
+    text: 'Find lagoons',
     tags: ['lagoon', 'recovery'],
-    prompt: 'Plan a perfect lagoon evening for stress relief.',
+    prompt: 'Show me geothermal lagoons I can visit in Iceland.',
   },
   {
     id: 'c4',
-    text: 'New to yoga',
+    text: 'Yoga studios',
     tags: ['yoga'],
-    prompt: "I'm new to yoga. Where should I start in Reykjavík?",
+    prompt: 'Show me yoga studios available in Reykjavík.',
   },
   {
     id: 'c5',
-    text: 'Best swim spots',
+    text: 'Swimming pools',
     tags: ['swimming'],
-    prompt: 'What are the best swimming pools or outdoor spots near me this week?',
+    prompt: 'Show me the best swimming pools near Reykjavík.',
   },
   {
     id: 'c6',
-    text: 'HIIT this week',
+    text: 'Find gyms',
     tags: ['gym'],
-    prompt: 'I want to do 2–3 HIIT sessions this week. What do you recommend?',
+    prompt: 'Show me gyms I can visit in Reykjavík.',
   },
   {
     id: 'c7',
-    text: 'Use my credits',
-    tags: ['credits', 'general'],
-    prompt: "I have credits to use before they expire. What's the best way to spend them?",
+    text: 'Spas & saunas',
+    tags: ['recovery'],
+    prompt: 'Show me spas and saunas I can visit in Iceland.',
   },
   {
     id: 'c8',
-    text: 'Relaxing evening',
-    tags: ['lagoon', 'recovery'],
-    prompt: 'Suggest a relaxing evening routine — something warm and restorative.',
+    text: 'Use my credits',
+    tags: ['credits', 'general'],
+    prompt: "I have credits to use before they expire. What's the best way to spend them?",
   },
 ];
 

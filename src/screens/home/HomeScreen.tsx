@@ -237,11 +237,9 @@ export default function HomeScreen() {
 // Quick-tap prompts shown in the AskCard. Each chip's `prompt` is what
 // gets sent to Coach when tapped.
 const ASK_CHIPS: { label: string; prompt: string }[] = [
-  { label: 'Quiet evening', prompt: 'Suggest a quiet, relaxing evening for me.' },
-  { label: '30 min sweat', prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
-  { label: 'Try something new', prompt: 'I want to try something new — what do you suggest?' },
-  { label: 'After work', prompt: "It's after 6pm. What's a good way to wind down nearby?" },
-  { label: 'Lagoon enthusiast', prompt: 'I love geothermal pools — suggest the best lagoon or thermal bath experience available on LifePass.' },
+  { label: '30 min sweat',       prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
+  { label: 'After work',         prompt: "It's after 6pm. What's a good way to wind down nearby?" },
+  { label: 'Lagoon enthusiast',  prompt: 'I love geothermal pools — suggest the best lagoon or thermal bath experience available on LifePass.' },
   { label: 'Visiting Reykjavík', prompt: "I'm a tourist visiting Reykjavík — what wellness experiences should I absolutely not miss?" },
 ];
 
@@ -313,8 +311,12 @@ function TryNewSection({
           </TouchableOpacity>
         </View>
 
-        {/* Quick chips */}
-        <View style={askCard.chips}>
+        {/* Quick chips — single swipable row */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={askCard.chips}
+        >
           {ASK_CHIPS.map((chip) => (
             <TouchableOpacity
               key={chip.label}
@@ -325,7 +327,7 @@ function TryNewSection({
               <Text style={askCard.chipText}>{chip.label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -414,8 +416,8 @@ const askCard = StyleSheet.create({
   },
   chips: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
+    paddingVertical: 2,
   },
   chip: {
     paddingHorizontal: 14,

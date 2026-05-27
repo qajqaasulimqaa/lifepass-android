@@ -1,29 +1,33 @@
 import { supabase } from '../lib/client';
-import type { ChatMessage } from '../../types/coach';
+import type { ChatMessage, CoachReply, VenueCard } from '../../types/coach';
 
-/** Shape Anthropic expects — { role, content }. We map from our ChatMessage. */
 type CoachMessage = { role: 'user' | 'assistant'; content: string };
 
-/**
- * Send the chat history to the Coach backend, which proxies Claude.
- *
- * There are two backends we support, picked at runtime by env var:
- *
- *   - If `EXPO_PUBLIC_COACH_API_URL` is set → POSTs directly to that URL
- *     (currently used for the lifepass-api Next.js project running
- *     locally at http://localhost:3001/api/coach).
- *
- *   - Otherwise → calls the Supabase Edge Function named `coach`
- *     (source in `supabase/functions/coach/index.ts`, deployed via
- *     `supabase functions deploy coach`).
- *
- * Either way, the ANTHROPIC_API_KEY lives on the server and never reaches
- * the mobile bundle.
- *
- * To switch backends, edit `.env` and restart Expo (env vars are only
- * read at startup).
- */
-export async function sendCoachMessage(history: ChatMessage[]): Promise<string> {
+function parseReply(raw: string): CoachReply {
+  // Strip markdown code fences if the AI wrapped the JSON in ```json ... ```
+  const stripped = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
+
+  // Find the outermost JSON object anywhere in the response
+  const start = stripped.indexOf('{');
+  const end = stripped.lastIndexOf('}');
+  if (start !== -1 && end > start) {
+    try {
+      const parsed = JSON.parse(stripped.slice(start, end + 1));
+      if (parsed.type === 'venues' && Array.isArray(parsed.venues) && parsed.venues.length > 0) {
+        return {
+          text: String(parsed.intro ?? 'Here are some options for you:'),
+          venueCards: parsed.venues as VenueCard[],
+          searchQuery: parsed.searchQuery ? String(parsed.searchQuery) : undefined,
+        };
+      }
+    } catch (_e) {
+      console.warn('[Coach] JSON parse failed:', _e);
+    }
+  }
+  return { text: raw };
+}
+
+export async function sendCoachMessage(history: ChatMessage[]): Promise<CoachReply> {
   const messages: CoachMessage[] = history.map((m) => ({
     role: m.role,
     content: m.text,
@@ -32,7 +36,6 @@ export async function sendCoachMessage(history: ChatMessage[]): Promise<string> 
   const apiUrl = process.env.EXPO_PUBLIC_COACH_API_URL;
 
   if (apiUrl) {
-    // Path A — direct fetch to a custom API endpoint (Next.js, etc.)
     const res = await fetch(apiUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -45,10 +48,9 @@ export async function sendCoachMessage(history: ChatMessage[]): Promise<string> 
       throw new Error(data?.error ?? `Coach API ${res.status}`);
     }
     if (!data?.reply) throw new Error('Empty response from coach');
-    return data.reply;
+    return parseReply(data.reply);
   }
 
-  // Path B — Supabase Edge Function
   const { data, error } = await supabase.functions.invoke<{ reply: string; error?: string }>(
     'coach',
     { body: { messages } },
@@ -57,5 +59,5 @@ export async function sendCoachMessage(history: ChatMessage[]): Promise<string> 
   if (error) throw new Error(error.message);
   if (data?.error) throw new Error(data.error);
   if (!data?.reply) throw new Error('Empty response from coach');
-  return data.reply;
+  return parseReply(data.reply);
 }
