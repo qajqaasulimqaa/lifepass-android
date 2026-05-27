@@ -12,8 +12,8 @@ type Props = {
 export default function WaveIcon({ size = 24, color = '#FFFFFF' }: Props) {
   return (
     <Svg
-      width={size}
-      height={(size * 29) / 30}
+      width={(size * 30) / 29}
+      height={size}
       viewBox="0 0 30 29"
       fill="none"
     >

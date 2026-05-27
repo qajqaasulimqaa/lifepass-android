@@ -34,6 +34,7 @@ import {
   VENUE_QUESTIONS,
 } from '../../data/coachQuestions';
 import { coachCategories } from '../../data/coachCategories';
+import { deriveCoachHeading } from '../../utils/activityHeading';
 import { fetchVenuesByCoachQuery } from '../../supabase/services/venues';
 import ChatDrawer from './ChatDrawer';
 import SuggestionChips from './SuggestionChips';
@@ -43,16 +44,20 @@ import QuestionBubbleMessage from './QuestionBubbleMessage';
 let idCounter = 100;
 const nextId = () => String(++idCounter);
 
-const CONTEXT_HEADING = 'Gym yesterday.\nToday is relaxing day.';
-
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<CoachStackParamList, 'CoachMain'>>();
   const prefilledMessage = route.params?.prefilledMessage;
 
-  const { bookings: pastBookings } = useBookings(false);
+  const { bookings: pastBookings }     = useBookings(false);
+  const { bookings: upcomingBookings } = useBookings(true);
   const { savedVenues } = useFavouriteVenues();
+
+  const contextHeading = useMemo(
+    () => deriveCoachHeading(pastBookings, upcomingBookings),
+    [pastBookings, upcomingBookings],
+  );
 
   const [messages, setMessages] = useState<ChatMessage[]>(mockCoachMessages);
   const [input, setInput] = useState('');
@@ -286,8 +291,21 @@ export default function CoachScreen() {
     callAI([...messages, userMsg]);
   }
 
-  function handleOtherIdeas(searchQuery: string, category: string) {
-    send(`Show me other ${searchQuery || category} options in Iceland`);
+  function handleOtherIdeas(_searchQuery: string, _category: string) {
+    // Append an inline category picker so the user can pick a new category
+    // without losing the existing conversation
+    setMessages((m) => [
+      ...m,
+      {
+        id: nextId(),
+        role: 'assistant',
+        text: 'What else can I help you find?',
+        categoryPicker: true,
+        categoryPickerAnswered: false,
+        createdAt: new Date(),
+      },
+    ]);
+    setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }
 
   function handleBook(venue: VenueCard) {
@@ -387,6 +405,22 @@ export default function CoachScreen() {
                     onOtherIdeas={handleOtherIdeas}
                     onBook={handleBook}
                   />
+                ) : m.categoryPicker ? (
+                  <InlineCategoryPicker
+                    key={m.id}
+                    intro={m.text}
+                    answered={!!m.categoryPickerAnswered}
+                    onSelect={(prompt) => {
+                      // Mark this picker as answered
+                      setMessages((msgs) =>
+                        msgs.map((msg) =>
+                          msg.id === m.id ? { ...msg, categoryPickerAnswered: true } : msg,
+                        ),
+                      );
+                      // Route through send() so detectVenueCategory picks the right Q&A flow
+                      send(prompt);
+                    }}
+                  />
                 ) : m.questionOptions && m.questionOptions.length > 0 ? (
                   <QuestionBubbleMessage
                     key={m.id}
@@ -406,14 +440,14 @@ export default function CoachScreen() {
             <>
               {/* Empty state: heading centred */}
               <View style={styles.headingContainer}>
-                <Text style={styles.heading}>{CONTEXT_HEADING}</Text>
+                <Text style={styles.heading}>{contextHeading}</Text>
               </View>
               <SuggestionChips chips={chips} onSelect={send} />
             </>
           )}
 
-          {/* Category strip — hidden while keyboard is open */}
-          {!keyboardVisible && CategoryStrip}
+          {/* Category strip — hidden while keyboard is open or once chat has started */}
+          {!keyboardVisible && !hasStartedChat && CategoryStrip}
 
           {/* ── Input bar ── */}
           <View style={[styles.inputBar, { paddingBottom: keyboardVisible ? insets.bottom + 8 : insets.bottom + 84 }]}>
@@ -456,6 +490,88 @@ export default function CoachScreen() {
     </KeyboardAvoidingView>
   );
 }
+
+// ─── Inline category picker ───────────────────────────────────────────────────
+
+function InlineCategoryPicker({
+  intro,
+  answered,
+  onSelect,
+}: {
+  intro: string;
+  answered: boolean;
+  onSelect: (prompt: string) => void;
+}) {
+  return (
+    <View style={picker.root}>
+      {/* Assistant bubble with intro text */}
+      <View style={picker.row}>
+        <View style={picker.avatar}>
+          <WaveIcon size={12} color={colors.skyBlue} />
+        </View>
+        <View style={picker.bubble}>
+          <Text style={picker.introText}>{intro}</Text>
+        </View>
+      </View>
+
+      {/* Category tiles */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={picker.scroll}
+        scrollEnabled={!answered}
+      >
+        {coachCategories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={[picker.card, answered && picker.cardDimmed]}
+            onPress={() => !answered && onSelect(cat.prompt)}
+            activeOpacity={answered ? 1 : 0.85}
+            disabled={answered}
+          >
+            <Image source={cat.image} style={picker.cardImage} />
+            <Text style={picker.cardLabel} numberOfLines={2}>{cat.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+const picker = StyleSheet.create({
+  root: { gap: 10 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  avatar: {
+    width: 24, height: 24, borderRadius: 12,
+    backgroundColor: 'rgba(168,216,240,0.15)',
+    alignItems: 'center', justifyContent: 'center',
+    flexShrink: 0,
+  },
+  bubble: {
+    maxWidth: '82%',
+    paddingHorizontal: 13, paddingVertical: 9,
+    borderRadius: 16, borderTopLeftRadius: 4,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.13)',
+  },
+  introText: { fontSize: 14, color: colors.paper, lineHeight: 20 },
+  scroll: { gap: 12, paddingHorizontal: 16, paddingVertical: 6 },
+  card: { width: 96, alignItems: 'center', gap: 8 },
+  cardDimmed: { opacity: 0.4 },
+  cardImage: {
+    width: 84, height: 84, borderRadius: 16,
+    backgroundColor: colors.ink3,
+  },
+  cardLabel: {
+    fontSize: 12, fontWeight: '500',
+    color: colors.paper2, textAlign: 'center', lineHeight: 15,
+  },
+});
 
 // ─── Message bubble ────────────────────────────────────────────────────────────
 
@@ -581,28 +697,28 @@ const styles = StyleSheet.create({
 
   // Category image strip — pinned just above input bar
   categoryScroll: {
-    gap: 12,
+    gap: 14,
     paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: 4,
+    paddingBottom: 6,
   },
   categoryCard: {
-    width: 72,
+    width: 96,
     alignItems: 'center',
-    gap: 6,
+    gap: 8,
   },
   categoryImage: {
-    width: 62,
-    height: 62,
-    borderRadius: 12,
+    width: 84,
+    height: 84,
+    borderRadius: 16,
     backgroundColor: colors.ink3,
   },
   categoryLabel: {
-    fontSize: 10,
+    fontSize: 12,
     fontWeight: '500',
     color: colors.paper2,
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 15,
   },
 });
 

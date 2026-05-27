@@ -33,6 +33,9 @@ export interface ChatMessage {
   questionOptions?: QuestionOption[];
   questionAnswered?: boolean;
   selectedAnswer?: string;
+  // Inline category picker
+  categoryPicker?: boolean;
+  categoryPickerAnswered?: boolean;
 }
 
 export interface SuggestionChip {

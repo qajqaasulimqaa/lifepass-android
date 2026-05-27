@@ -13,8 +13,8 @@ type Props = {
 export default function ProfileIcon({ size = 24, color = '#FFFFFF' }: Props) {
   return (
     <Svg
-      width={size}
-      height={(size * 28) / 25}
+      width={(size * 25) / 28}
+      height={size}
       viewBox="0 0 25 28"
       fill="none"
     >

@@ -21,11 +21,14 @@ import { useVenues } from '../../supabase/hooks/useVenues';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { useWeather } from '../../hooks/useWeather';
+import { useBookings } from '../../supabase/hooks/useBookings';
+import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
+import { deriveHomeTagline } from '../../utils/activityHeading';
 import { weatherRecommendation } from '../../services/weather';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
-import CuratedVenueRow from '../../components/CuratedVenueRow';
+import PopularVenueRow from '../../components/PopularVenueRow';
 import { coachCategories, type CoachCategory } from '../../data/coachCategories';
 import type { HomeStackParamList, TabParamList } from '../../navigation/types';
 
@@ -53,6 +56,14 @@ export default function HomeScreen() {
   const { credits } = useSubscription();
   const { venues, loading } = useVenues();
   const { weather } = useWeather();
+  const { bookings: pastBookings }     = useBookings(false);
+  const { bookings: upcomingBookings } = useBookings(true);
+  const activityTagline = deriveHomeTagline(pastBookings, upcomingBookings);
+
+  const { savedVenues, savedVenueIds, toggle } = useFavouriteVenues();
+
+  // "Most popular now" = saved venues if the user has any, else fall back to curated list (max 4)
+  const popularVenues = (savedVenues.length > 0 ? savedVenues : venues.slice(1)).slice(0, 4);
 
   const greeting = getGreeting();
   const fullName: string = user?.user_metadata?.full_name ?? user?.email ?? '';
@@ -61,7 +72,6 @@ export default function HomeScreen() {
 
   const hero = venues[0];
   const nearby = venues.slice(1, 4);
-  const curated = venues.slice(4);
 
   function openVenue(venueId: string) {
     navigation.navigate('VenueDetail', { venueId });
@@ -136,6 +146,9 @@ export default function HomeScreen() {
             <Text style={styles.greetingText}>
               {greeting}, <Text style={styles.greetingName}>{firstName}.</Text>
             </Text>
+            {activityTagline ? (
+              <Text style={styles.activityTagline}>{activityTagline}</Text>
+            ) : null}
 
             {hero && (
               <View style={styles.pickupCard}>
@@ -205,20 +218,29 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* Curated */}
-          {curated.length > 0 && (
+          {/* Most popular now */}
+          {popularVenues.length > 0 && (
             <View style={styles.shelf}>
               <View style={styles.shelfHeader}>
                 <View>
-                  <Kicker text={`Curated · ${greeting.toLowerCase()}`} />
-                  <Text style={styles.shelfTitle}>Picked for you</Text>
+                  <Kicker text="Trending" />
+                  <Text style={styles.shelfTitle}>Most popular now</Text>
                 </View>
               </View>
 
               <View style={styles.curatedList}>
-                {curated.map((venue) => (
-                  <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                    <CuratedVenueRow venue={venue} />
+                {popularVenues.map((venue) => (
+                  <TouchableOpacity
+                    key={venue.id}
+                    activeOpacity={0.85}
+                    onPress={() => openVenue(venue.id)}
+                  >
+                    <PopularVenueRow
+                      venue={venue}
+                      isFavourited={savedVenueIds.includes(venue.id)}
+                      onBook={() => openVenue(venue.id)}
+                      onToggleFavourite={() => toggle(venue.id)}
+                    />
                   </TouchableOpacity>
                 ))}
               </View>
@@ -475,6 +497,12 @@ const styles = StyleSheet.create({
     letterSpacing: -1.2, lineHeight: 44,
   },
   greetingName: { color: colors.paper, fontStyle: 'italic' },
+  activityTagline: {
+    fontSize: 14,
+    color: colors.paper2,
+    letterSpacing: -0.1,
+    marginTop: -4,
+  },
   // Pickup card — glass section with thumbnail + venue info + book button.
   pickupCard: {
     flexDirection: 'row',
