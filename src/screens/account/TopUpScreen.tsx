@@ -8,6 +8,7 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
@@ -52,7 +53,7 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     id: 'plan-m',
     name: 'Plan M',
     shortName: 'M',
-    subtitle: 'The regular',
+    subtitle: 'Active lifestyles, basic venues',
     priceISK: 25_500,
     totalCredits: 25,
     dailyLimit: 1,
@@ -70,7 +71,7 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     subtitle: 'Luxury access',
     priceISK: 36_900,
     totalCredits: 36,
-    dailyLimit: 2,
+    dailyLimit: 1/2,
     hasLuxury: true,
     luxuryVisitCap: 6,
     isPopular: true,
@@ -82,7 +83,7 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     id: 'plan-xl',
     name: 'Plan XL',
     shortName: 'XL',
-    subtitle: 'Maximum access',
+    subtitle: 'Maximum access to all facilities',
     priceISK: 65_900,
     totalCredits: 65,
     dailyLimit: 3,
@@ -166,6 +167,7 @@ function formatISK(value: number): string {
 
 export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
+  const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState<0 | 1>(0); // 0 = Monthly, 1 = One-off
   const [selectedId, setSelectedId] = useState<string>('plan-l');
@@ -215,21 +217,24 @@ export default function TopUpScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[styles.scroll, { paddingBottom: tabBarHeight + 100 }]}
         showsVerticalScrollIndicator={false}
       >
         {/* Headline */}
         <View style={styles.headline}>
-          <Text style={styles.headlineText}>Your wellness,{'\n'}your plan.</Text>
+          <View style={styles.headlineTitleBlock}>
+            <Text style={styles.headlineBig}>Pay per visit</Text>
+            <Text style={styles.headlineSmall}>or per month.</Text>
+          </View>
           <Text style={styles.headlineSub}>
-            Monthly subscriptions keep credits rolling. One-off packs expire after 30 days.
+            You choose how you want to top up your credits. Monthly plans are great for locals and long-term visitors. Weekly plans are perfect for short stays.
           </Text>
         </View>
 
         {/* Segment toggle */}
         <View style={styles.segmentWrap}>
           <SegmentButton label="Monthly" active={tab === 0} onPress={() => switchTab(0)} />
-          <SegmentButton label="One-off" active={tab === 1} onPress={() => switchTab(1)} />
+          <SegmentButton label="Weekly" active={tab === 1} onPress={() => switchTab(1)} />
         </View>
 
         {/* Plan cards */}
@@ -261,15 +266,16 @@ export default function TopUpScreen() {
             ? '3-month commitment · Credits renew monthly · Cancel anytime after'
             : 'Credits expire 30 days after purchase · No rollovers · Luxury included'}
         </Text>
-
-        {/* CTA */}
-        <View style={styles.cta}>
-          <PrimaryButton
-            title={`Continue with ${selectedPlan.shortName} · ${formatISK(selectedPlan.priceISK)} ISK`}
-            onPress={handleContinue}
-          />
-        </View>
       </ScrollView>
+
+      {/* CTA — floating pill at bottom-right, above tab bar */}
+      <View style={[styles.cta, { bottom: tabBarHeight + 36 }]}>
+        <PrimaryButton
+          block={false}
+          title={`Continue with ${selectedPlan.shortName} →`}
+          onPress={handleContinue}
+        />
+      </View>
     </View>
   );
 }
@@ -362,16 +368,12 @@ function PlanCard({
         <Text style={cardStyles.credits}>{plan.totalCredits}</Text>
         <Text style={cardStyles.creditsLabel}> credits</Text>
         <Text style={cardStyles.sep}> · </Text>
-        <Text style={cardStyles.detail}>{plan.dailyLimit}/day</Text>
+        <Text style={cardStyles.detail}>{plan.dailyLimit} facilit{plan.dailyLimit === 1 ? 'y' : 'ies'} a day</Text>
         {plan.hasLuxury && (
           <>
             <Text style={cardStyles.sep}> · </Text>
             <Ionicons name="sparkles" size={11} color={colors.skyBlue} />
-            <Text style={cardStyles.luxury}>
-              {plan.luxuryVisitCap != null
-                ? ` ${plan.luxuryVisitCap} luxury/mo`
-                : ' Luxury included'}
-            </Text>
+            <Text style={cardStyles.luxury}> Luxury venues</Text>
           </>
         )}
       </View>
@@ -459,15 +461,30 @@ const styles = StyleSheet.create({
 
   scroll: { paddingHorizontal: 20, paddingTop: 8, gap: 24 },
 
-  headline: { gap: 8, paddingTop: 4 },
-  headlineText: {
-    fontSize: 34,
+  headline: { gap: 12, paddingTop: 4 },
+  headlineTitleBlock: { gap: 2 },
+  headlineBig: {
+    fontSize: 46,
     fontWeight: '300',
     color: colors.paper,
-    letterSpacing: -1,
-    lineHeight: 42,
+    letterSpacing: -1.5,
+    lineHeight: 52,
   },
-  headlineSub: { fontSize: 13, color: colors.paper3, lineHeight: 19 },
+  headlineSmall: {
+    fontSize: 28,
+    fontWeight: '300',
+    fontStyle: 'italic',
+    color: colors.blueMid,
+    letterSpacing: -0.8,
+    lineHeight: 34,
+  },
+  headlineSub: {
+    fontSize: 17,
+    fontWeight: '400',
+    color: colors.paper2,
+    lineHeight: 24,
+    letterSpacing: -0.2,
+  },
 
   segmentWrap: {
     flexDirection: 'row',
@@ -499,5 +516,5 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 
-  cta: { paddingTop: 4 },
+  cta: { position: 'absolute', right: 20 },
 });

@@ -201,7 +201,13 @@ export default function AccountScreen() {
             </View>
             <View style={memberCard.nameBlock}>
               <Text style={memberCard.name}>{displayName}</Text>
-              <Text style={memberCard.email} numberOfLines={1}>{email}</Text>
+              <View style={memberCard.emailRow}>
+                <Ionicons name="mail-outline" size={11} color={colors.paper3} />
+                <Text style={memberCard.email} numberOfLines={1}>{email}</Text>
+              </View>
+            </View>
+            <View style={memberCard.memberBadge}>
+              <Text style={memberCard.memberBadgeText}>Member</Text>
             </View>
           </View>
 
@@ -414,33 +420,53 @@ const memberCard = StyleSheet.create({
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 16,
   },
   avatar: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 62,
+    height: 62,
+    borderRadius: 31,
     backgroundColor: colors.moss,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: colors.line2,
+    borderWidth: 1.5,
+    borderColor: 'rgba(168,216,240,0.3)',
   },
   avatarInitial: {
-    fontSize: 22,
-    fontWeight: '700',
+    fontSize: 26,
+    fontWeight: '600',
     color: '#FFFFFF',
+    letterSpacing: -0.5,
   },
-  nameBlock: { flex: 1 },
+  nameBlock: { flex: 1, gap: 4 },
   name: {
-    fontSize: 16,
+    fontSize: 19,
     fontWeight: '600',
     color: colors.paper,
+    letterSpacing: -0.4,
+  },
+  emailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   email: {
     fontSize: 12,
     color: colors.paper3,
-    marginTop: 2,
+  },
+  memberBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+    backgroundColor: 'rgba(168,216,240,0.1)',
+    borderWidth: 0.5,
+    borderColor: 'rgba(168,216,240,0.3)',
+  },
+  memberBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.skyBlue,
+    letterSpacing: 0.5,
   },
   creditRow: {
     flexDirection: 'row',

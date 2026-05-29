@@ -500,10 +500,10 @@ const styles = StyleSheet.create({
   },
   heroImage: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
+    top: -50,
     left: 0,
-    width: SCREEN_WIDTH * 1.4, // wider than screen, anchored left so both people are visible
+    width: SCREEN_WIDTH * 1.4,
+    height: HERO_HEIGHT + 50,
   },
   heroInner: {
     flex: 1,
