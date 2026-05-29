@@ -11,6 +11,7 @@ export type AuthStackParamList = {
 type SharedTabRoutes = {
   VenueDetail: { venueId: string };
   Account: undefined;
+  TopUp: undefined;
   BookingFlow: { venueId: string; activityId: string };
 };
 

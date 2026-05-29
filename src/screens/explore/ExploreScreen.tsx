@@ -13,13 +13,22 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import MapView, { Marker } from '../../components/MapView';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { Video, ResizeMode } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExploreStackParamList } from '../../navigation/types';
 import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
-import { categoryFilters, matchesCategory } from '../../data/categories';
+import {
+  categoryFilters,
+  matchesCategory,
+  matchesCreditRange,
+  GYM_GROUP_IDS,
+  CREDIT_FILTERS,
+  type CreditRange,
+} from '../../data/categories';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import type { Venue } from '../../types/venue';
@@ -73,7 +82,9 @@ export default function ExploreScreen() {
 
   const [search, setSearch] = useState('');
   const [classFilter, setClassFilter] = useState<ClassFilter>('all');
+  const [creditFilter, setCreditFilter] = useState<CreditRange>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [gymGroupOpen, setGymGroupOpen] = useState(false);
   const [presentation, setPresentation] = useState<Presentation>('list');
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
@@ -87,10 +98,11 @@ export default function ExploreScreen() {
       if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (classFilter === 'basic' && v.classification === 'luxury') return false;
       if (classFilter === 'luxury' && v.classification !== 'luxury') return false;
+      if (!matchesCreditRange(v.creditCost, creditFilter)) return false;
       if (categoryFilter && !matchesCategory(v.category, categoryFilter)) return false;
       return true;
     });
-  }, [venues, search, classFilter, categoryFilter]);
+  }, [venues, search, classFilter, creditFilter, categoryFilter]);
 
   function classCount(f: ClassFilter) {
     return venues.filter((v) =>
@@ -138,11 +150,15 @@ export default function ExploreScreen() {
           style={styles.toggleButton}
           onPress={() => setPresentation(presentation === 'map' ? 'list' : 'map')}
         >
-          <Text style={styles.toggleIcon}>{presentation === 'map' ? '≡' : '⊞'}</Text>
+          <Ionicons
+            name={presentation === 'map' ? 'list-outline' : 'map-outline'}
+            size={20}
+            color={colors.paper}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Class chips */}
+      {/* Row 1 — Class: All / Basic / Luxury */}
       <View style={styles.classChips}>
         {CLASS_FILTERS.map((f) => {
           const selected = classFilter === f.id;
@@ -162,40 +178,112 @@ export default function ExploreScreen() {
         })}
       </View>
 
-      {/* Category chips */}
+      {/* Row 2 — Credits: All / 1-2 / 3-5 / 6+ */}
+      <View style={styles.classChips}>
+        {CREDIT_FILTERS.map((f) => {
+          const selected = creditFilter === f.id;
+          return (
+            <TouchableOpacity
+              key={f.id}
+              style={[styles.chip, selected && styles.chipSelected]}
+              onPress={() => setCreditFilter(f.id)}
+            >
+              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+
+      {/* Row 3 — Category chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.categoryChips}
         style={styles.categoryScroll}
       >
+        {/* All */}
         <TouchableOpacity
           style={[styles.chip, !categoryFilter && styles.chipSelected]}
-          onPress={() => setCategoryFilter(null)}
+          onPress={() => { setCategoryFilter(null); setGymGroupOpen(false); }}
         >
           <Text style={[styles.chipText, !categoryFilter && styles.chipTextSelected]}>All</Text>
           <Text style={[styles.chipCount, !categoryFilter && styles.chipTextSelected]}>
             {venues.length}
           </Text>
         </TouchableOpacity>
-        {categoryFilters.map((f) => {
-          const selected = categoryFilter === f.id;
+
+        {/* Gym & Fitness — expandable group */}
+        {(() => {
+          const gymActive = categoryFilter !== null && GYM_GROUP_IDS.includes(categoryFilter);
           return (
             <TouchableOpacity
-              key={f.id}
-              style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => setCategoryFilter(selected ? null : f.id)}
+              style={[styles.chip, (gymGroupOpen || gymActive) && styles.chipSelected]}
+              onPress={() => {
+                setGymGroupOpen((o) => !o);
+                if (gymActive) setCategoryFilter(null);
+              }}
             >
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                {f.displayName}
+              <Text style={[styles.chipText, (gymGroupOpen || gymActive) && styles.chipTextSelected]}>
+                Gym & Fitness
               </Text>
-              <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
-                {categoryCount(f.id)}
+              <Text style={[styles.chipText, (gymGroupOpen || gymActive) && styles.chipTextSelected]}>
+                {gymGroupOpen ? ' ▲' : ' ▼'}
               </Text>
             </TouchableOpacity>
           );
-        })}
+        })()}
+
+        {/* All other categories (excluding gym-group members — shown in sub-row) */}
+        {categoryFilters
+          .filter((f) => !GYM_GROUP_IDS.includes(f.id))
+          .map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity
+                key={f.id}
+                style={[styles.chip, selected && styles.chipSelected]}
+                onPress={() => { setCategoryFilter(selected ? null : f.id); setGymGroupOpen(false); }}
+              >
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                  {f.displayName}
+                </Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
+                  {categoryCount(f.id)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
       </ScrollView>
+
+      {/* Row 4 — Gym sub-categories (visible only when group is expanded) */}
+      {gymGroupOpen && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips}
+          style={styles.gymSubRow}
+        >
+          {categoryFilters
+            .filter((f) => GYM_GROUP_IDS.includes(f.id))
+            .map((f) => {
+              const selected = categoryFilter === f.id;
+              return (
+                <TouchableOpacity
+                  key={f.id}
+                  style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                  onPress={() => setCategoryFilter(selected ? null : f.id)}
+                >
+                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+                    {f.displayName}
+                  </Text>
+                  <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
+                    {categoryCount(f.id)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+        </ScrollView>
+      )}
     </>
   );
 
@@ -269,7 +357,7 @@ export default function ExploreScreen() {
             keyExtractor={(v) => v.id}
             contentContainerStyle={styles.list}
             showsVerticalScrollIndicator={false}
-            ListHeaderComponent={venues.length > 0 ? <EditorialBanner heroVenue={venues.find(v => v.classification === 'luxury') ?? venues[0]} /> : null}
+            ListHeaderComponent={<EditorialBanner />}
             ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
             renderItem={({ item }) => (
               <TouchableOpacity activeOpacity={0.85} onPress={() => openVenue(item.id)}>
@@ -321,20 +409,28 @@ const markerStyles = StyleSheet.create({
   },
 });
 
-function EditorialBanner({ heroVenue }: { heroVenue: Venue }) {
+function EditorialBanner() {
   return (
     <View style={bannerStyles.container}>
-      <Image source={{ uri: heroVenue.imageUrl }} style={bannerStyles.image} />
+      <Video
+        source={require('../../../assets/hero-video-compressed.mp4')}
+        style={StyleSheet.absoluteFill}
+        resizeMode={ResizeMode.COVER}
+        shouldPlay
+        isLooping
+        isMuted
+        useNativeControls={false}
+      />
       <LinearGradient
-        colors={['rgba(15,23,42,0.05)', 'rgba(15,23,42,0.90)']}
-        locations={[0.4, 1.0]}
+        colors={['rgba(15,23,42,0.05)', 'rgba(15,23,42,0.85)']}
+        locations={[0.3, 1.0]}
         style={StyleSheet.absoluteFill}
       />
       <View style={bannerStyles.copy}>
-        <Kicker text="Editorial" color={colors.skyBlue} />
+        <Kicker text="Feel Great Everyday" color={colors.skyBlue} />
         <Text style={bannerStyles.title}>
-          Six lagoons for{' '}
-          <Text style={bannerStyles.italic}>long weekends</Text>
+          Gym, Spa, Pool, Lagoon-{' '}
+          <Text style={bannerStyles.italic}> all at one pass</Text>
         </Text>
       </View>
     </View>
@@ -393,7 +489,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink2, borderRadius: 12,
     borderWidth: 0.5, borderColor: colors.line,
   },
-  toggleIcon: { fontSize: 18, color: colors.paper },
   classChips: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, paddingBottom: 4 },
   categoryScroll: { height: 44, marginBottom: 4 },
   categoryChips: { paddingHorizontal: 20, gap: 8, alignItems: 'flex-start' },
@@ -408,6 +503,9 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: colors.ink },
   chipCount: { fontSize: 11, color: colors.paper3, opacity: 0.8 },
   luxuryDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.skyBlue },
+  gymSubRow: { height: 44, marginBottom: 4 },
+  chipSub: {},
+  chipSubSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   // Full-screen map root — no safe-area padding, tiles bleed to all edges
   mapFull: { flex: 1 },

@@ -17,6 +17,7 @@ import { useBookings } from '../../supabase/hooks/useBookings';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import BrandedTopBar from '../../components/BrandedTopBar';
+import ProfileCreditCard from '../../components/ProfileCreditCard';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import EmptyState from '../../components/EmptyState';
@@ -67,6 +68,11 @@ export default function BookingsScreen() {
   return (
     <View style={styles.container}>
       <BrandedTopBar title="Library" subtitle="Bookings & saved" />
+
+      {/* Profile + credits card */}
+      <View style={styles.profileCardWrap}>
+        <ProfileCreditCard />
+      </View>
 
       {/* Top tabs */}
       <View style={styles.topTabs}>
@@ -140,6 +146,7 @@ function BookingsTab({
   upcoming: Booking[];
   past: Booking[];
 }) {
+  const navigation = useNavigation<Nav>();
   const list = subTab === 'upcoming' ? upcoming : past;
 
   return (
@@ -159,13 +166,17 @@ function BookingsTab({
         />
       </View>
 
-      <TouchableOpacity style={styles.spaCta} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.spaCta}
+        activeOpacity={0.7}
+        onPress={() => navigation.getParent()?.navigate('Explore' as never)}
+      >
         <View style={styles.spaIcon}>
-          <Ionicons name="water-outline" size={14} color={colors.blueMid} />
+          <Ionicons name="compass-outline" size={14} color={colors.blueMid} />
         </View>
         <View style={styles.spaText}>
-          <Text style={styles.spaTitle}>Book a lagoon</Text>
-          <Text style={styles.spaSub} numberOfLines={1}>Forest Lagoon, Vök Baths</Text>
+          <Text style={styles.spaTitle}>Book Now</Text>
+          <Text style={styles.spaSub} numberOfLines={1}>Browse venues & classes</Text>
         </View>
         <Ionicons name="chevron-forward" size={11} color={colors.paper3} />
       </TouchableOpacity>
@@ -393,6 +404,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.ink },
 
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  profileCardWrap: { paddingTop: 14, paddingBottom: 4 },
 
   topTabs: {
     flexDirection: 'row',

@@ -14,6 +14,11 @@ import {
   ImageBackground,
   Keyboard,
 } from 'react-native';
+// MIC UNWIRED — restore before launch
+// import {
+//   ExpoSpeechRecognitionModule,
+//   useSpeechRecognitionEvent,
+// } from 'expo-speech-recognition';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -68,8 +73,18 @@ export default function CoachScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const autoSentRef = useRef(false);
+
+  // MIC UNWIRED — restore before launch
+  // useSpeechRecognitionEvent('start', () => setIsListening(true));
+  // useSpeechRecognitionEvent('end',   () => setIsListening(false));
+  // useSpeechRecognitionEvent('result', (event) => {
+  //   const transcript = event.results[0]?.transcript ?? '';
+  //   if (transcript) setInput(transcript);
+  // });
+  // useSpeechRecognitionEvent('error', () => setIsListening(false));
 
   // Q&A flow state — tracks which category and step we're on
   const [qaFlow, setQaFlow] = useState<{
@@ -315,6 +330,11 @@ export default function CoachScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefilledMessage]);
 
+  // MIC UNWIRED — restore before launch
+  function handleMicPress() {
+    // no-op until mic is rewired
+  }
+
   function resetChat() {
     setMessages(mockCoachMessages);
     setInput('');
@@ -450,9 +470,17 @@ export default function CoachScreen() {
                 <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
               </TouchableOpacity>
             ) : (
-              <View style={styles.micContainer}>
-                <Ionicons name="mic-outline" size={22} color="rgba(255,255,255,0.55)" />
-              </View>
+              <TouchableOpacity
+                style={[styles.micContainer, isListening && styles.micContainerActive]}
+                onPress={handleMicPress}
+                activeOpacity={0.7}
+              >
+                <Ionicons
+                  name={isListening ? 'mic' : 'mic-outline'}
+                  size={22}
+                  color={isListening ? colors.skyBlue : 'rgba(255,255,255,0.55)'}
+                />
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -545,7 +573,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
     paddingTop: 48,
-    marginBottom:100,
+    marginBottom:160,
   },
   heading: {
     fontSize: 36,
@@ -588,6 +616,12 @@ const styles = StyleSheet.create({
     width: 42, height: 42,
     alignItems: 'center',
     justifyContent: 'center',
+    borderRadius: 21,
+  },
+  micContainerActive: {
+    backgroundColor: 'rgba(168,216,240,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(168,216,240,0.35)',
   },
 
   // Category image strip — pinned just above input bar

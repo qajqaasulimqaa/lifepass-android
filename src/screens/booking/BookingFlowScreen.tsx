@@ -15,6 +15,7 @@ import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
 import { fetchAvailableSlots, createBooking } from '../../supabase/services/bookings';
 import PrimaryButton from '../../components/PrimaryButton';
 import Kicker from '../../components/Kicker';
+import { scheduleBookingReminders } from '../../services/notifications';
 import type { Activity, Venue } from '../../types/venue';
 import type { TimeSlot } from '../../types/subscription';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -92,7 +93,14 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
       const bookingTime = new Date(selectedSlot.startTime);
       // credit_type derives from the activity's classification
       const creditType = activity.classification === 'luxury' ? 'luxury' : 'basic';
-      await createBooking(activity.id, bookingTime, creditType);
+      const booking = await createBooking(activity.id, bookingTime, creditType);
+      // Schedule "tomorrow" + "1 hour before" reminders in the background
+      scheduleBookingReminders({
+        bookingId: booking.id,
+        venueName: venue?.name ?? '',
+        activityName: activity.name,
+        bookingTime,
+      }).catch(() => {}); // non-critical — don't block the success screen
       setConfirmed(true);
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Could not create booking. Try again.';

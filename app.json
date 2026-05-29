@@ -32,6 +32,23 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#0A1E3A",
+          "sounds": []
+        }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "Allow LifePass to use the microphone for voice input.",
+          "speechRecognitionPermission": "Allow LifePass to use speech recognition so you can speak to your wellness coach."
+        }
+      ]
+    ]
   }
 }
