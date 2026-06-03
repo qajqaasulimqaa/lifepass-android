@@ -75,6 +75,7 @@ export default function CoachScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
+  const categoryScrollRef = useRef<ScrollView | null>(null);
   const autoSentRef = useRef(false);
 
   // MIC UNWIRED — restore before launch
@@ -344,25 +345,47 @@ export default function CoachScreen() {
 
   // Render the category strip (reused in both chat and empty states)
   const CategoryStrip = (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.categoryScroll}
-    >
-      {coachCategories.map((cat) => (
-        <TouchableOpacity
-          key={cat.id}
-          style={styles.categoryCard}
-          onPress={() => send(cat.prompt)}
-          activeOpacity={0.85}
-        >
-          <Image source={cat.image} style={styles.categoryImage} />
-          <Text style={styles.categoryLabel} numberOfLines={2}>
-            {cat.label}
-          </Text>
-        </TouchableOpacity>
-      ))}
-    </ScrollView>
+    <View style={styles.categoryStripRow}>
+      <TouchableOpacity
+        style={styles.categoryArrow}
+        onPress={() => categoryScrollRef.current?.scrollTo({ x: 0, animated: true })}
+        activeOpacity={0.6}
+        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+      >
+        <Ionicons name="chevron-back" size={16} color="rgba(255,255,255,0.45)" />
+      </TouchableOpacity>
+
+      <ScrollView
+        ref={categoryScrollRef}
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.categoryScroll}
+        style={{ flex: 1 }}
+      >
+        {coachCategories.map((cat) => (
+          <TouchableOpacity
+            key={cat.id}
+            style={styles.categoryCard}
+            onPress={() => send(cat.prompt)}
+            activeOpacity={0.85}
+          >
+            <Image source={cat.image} style={styles.categoryImage} />
+            <Text style={styles.categoryLabel} numberOfLines={2}>
+              {cat.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
+
+      <TouchableOpacity
+        style={styles.categoryArrow}
+        onPress={() => categoryScrollRef.current?.scrollToEnd({ animated: true })}
+        activeOpacity={0.6}
+        hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+      >
+        <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.45)" />
+      </TouchableOpacity>
+    </View>
   );
 
   return (
@@ -627,8 +650,7 @@ const styles = StyleSheet.create({
   // Category image strip — pinned just above input bar
   categoryScroll: {
     gap: 12,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+    paddingHorizontal: 8,
   },
   categoryCard: {
     width: 92,
@@ -647,6 +669,16 @@ const styles = StyleSheet.create({
     color: colors.paper2,
     textAlign: 'center',
     lineHeight: 13,
+  },
+  categoryStripRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingTop: 12,
+  },
+  categoryArrow: {
+    width: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 

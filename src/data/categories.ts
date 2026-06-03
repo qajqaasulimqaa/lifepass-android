@@ -22,25 +22,43 @@ export const categoryFilters: FilterCategory[] = [
   { id: 'pilates',        displayName: 'Pilates',          dbCategories: ['Pilates', 'Pilates Studio'] },
   { id: 'yoga',           displayName: 'Yoga',             dbCategories: ['Yoga', 'Yoga Studio', 'Meditation', 'Breathwork', 'Mindfulness'] },
   { id: 'recovery',       displayName: 'Recovery',         dbCategories: ['Recovery', 'Recovery Center', 'Cold Plunge'] },
-  { id: 'wellness',       displayName: 'Wellness',         dbCategories: ['Wellness', 'Wellness Center'] },
   { id: 'barre',          displayName: 'Barre',            dbCategories: ['Barre'] },
   { id: 'skillx',         displayName: 'SkillX',           dbCategories: ['SkillX', 'Skill'] },
   { id: 'infrared',       displayName: 'Infrared',         dbCategories: ['Infrared', 'Infrared Sauna'] },
-  { id: 'sports',         displayName: 'Sports',           dbCategories: ['Sports', 'Sports Facility'] },
   { id: 'padel',          displayName: 'Padel',            dbCategories: ['Padel'] },
   { id: 'mma',            displayName: 'MMA',              dbCategories: ['MMA', 'Mixed Martial Arts'] },
   { id: 'boxing',         displayName: 'Boxing',           dbCategories: ['Boxing'] },
   { id: 'groupclasses',   displayName: 'Group Classes',    dbCategories: ['Group Classes', 'Group Class'] },
   { id: 'grouptraining',  displayName: 'Group Training',   dbCategories: ['Group Training'] },
   { id: 'massage',        displayName: 'Massage',          dbCategories: ['Massage', 'Massage Therapy'] },
-  { id: 'chiro',          displayName: 'Chiropractic',     dbCategories: ['Chiropractic', 'Chiropractor'] },
   { id: 'swimming',       displayName: 'Swimming',         dbCategories: ['Swimming'] },
 ];
 
 /** IDs that belong to the "Gym & Fitness" expandable group. */
 export const GYM_GROUP_IDS = [
   'gym', 'strength', 'cardio', 'fitness',
-  'barre', 'groupclasses', 'grouptraining', 'skillx',
+  'barre', 'groupclasses', 'grouptraining', 'skillx', 'infrared',
+];
+
+/** IDs that belong to the "Martial Arts" expandable group. */
+export const MARTIAL_ARTS_GROUP_IDS = ['mma', 'boxing'];
+
+/** IDs that belong to the "Wellness" expandable group. */
+export const WELLNESS_GROUP_IDS = ['pool', 'spa', 'hotspring', 'massage', 'lagoon', 'sauna', 'recovery'];
+
+/** IDs that belong to the "Sports" expandable group. */
+export const SPORTS_GROUP_IDS = ['padel', 'golf', 'swimming'];
+
+/** IDs that belong to the "Pilates & Yoga" expandable group. */
+export const PILATES_YOGA_GROUP_IDS = ['pilates', 'yoga'];
+
+/** All grouped IDs — used to exclude them from the flat chip row. */
+export const ALL_GROUP_IDS = [
+  ...GYM_GROUP_IDS,
+  ...MARTIAL_ARTS_GROUP_IDS,
+  ...WELLNESS_GROUP_IDS,
+  ...SPORTS_GROUP_IDS,
+  ...PILATES_YOGA_GROUP_IDS,
 ];
 
 export function matchesCategory(venueCategories: string[], filterId: string): boolean {

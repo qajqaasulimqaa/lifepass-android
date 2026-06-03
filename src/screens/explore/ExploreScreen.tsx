@@ -26,6 +26,11 @@ import {
   matchesCategory,
   matchesCreditRange,
   GYM_GROUP_IDS,
+  MARTIAL_ARTS_GROUP_IDS,
+  WELLNESS_GROUP_IDS,
+  SPORTS_GROUP_IDS,
+  PILATES_YOGA_GROUP_IDS,
+  ALL_GROUP_IDS,
   CREDIT_FILTERS,
   type CreditRange,
 } from '../../data/categories';
@@ -85,11 +90,23 @@ export default function ExploreScreen() {
   const [creditFilter, setCreditFilter] = useState<CreditRange>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
   const [gymGroupOpen, setGymGroupOpen] = useState(false);
+  const [martialArtsOpen, setMartialArtsOpen] = useState(false);
+  const [wellnessOpen, setWellnessOpen] = useState(false);
+  const [sportsOpen, setSportsOpen] = useState(false);
+  const [pilatesYogaOpen, setPilatesYogaOpen] = useState(false);
   const [presentation, setPresentation] = useState<Presentation>('list');
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   function openVenue(venueId: string) {
     navigation.navigate('VenueDetail', { venueId });
+  }
+
+  function closeAllGroups() {
+    setGymGroupOpen(false);
+    setMartialArtsOpen(false);
+    setWellnessOpen(false);
+    setSportsOpen(false);
+    setPilatesYogaOpen(false);
   }
 
   // Client-side filtering — venues list is small enough
@@ -194,7 +211,7 @@ export default function ExploreScreen() {
         })}
       </View>
 
-      {/* Row 3 — Category chips */}
+      {/* Row 3 — Category group dropdowns + flat chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -204,7 +221,7 @@ export default function ExploreScreen() {
         {/* All */}
         <TouchableOpacity
           style={[styles.chip, !categoryFilter && styles.chipSelected]}
-          onPress={() => { setCategoryFilter(null); setGymGroupOpen(false); }}
+          onPress={() => { setCategoryFilter(null); closeAllGroups(); }}
         >
           <Text style={[styles.chipText, !categoryFilter && styles.chipTextSelected]}>All</Text>
           <Text style={[styles.chipCount, !categoryFilter && styles.chipTextSelected]}>
@@ -212,37 +229,131 @@ export default function ExploreScreen() {
           </Text>
         </TouchableOpacity>
 
-        {/* Gym & Fitness — expandable group */}
+        {/* Gym & Fitness */}
         {(() => {
-          const gymActive = categoryFilter !== null && GYM_GROUP_IDS.includes(categoryFilter);
+          const active = categoryFilter !== null && GYM_GROUP_IDS.includes(categoryFilter);
           return (
             <TouchableOpacity
-              style={[styles.chip, (gymGroupOpen || gymActive) && styles.chipSelected]}
+              style={[styles.chip, (gymGroupOpen || active) && styles.chipSelected]}
               onPress={() => {
-                setGymGroupOpen((o) => !o);
-                if (gymActive) setCategoryFilter(null);
+                const next = !gymGroupOpen;
+                closeAllGroups();
+                setGymGroupOpen(next);
+                if (active) setCategoryFilter(null);
               }}
             >
-              <Text style={[styles.chipText, (gymGroupOpen || gymActive) && styles.chipTextSelected]}>
+              <Text style={[styles.chipText, (gymGroupOpen || active) && styles.chipTextSelected]}>
                 Gym & Fitness
               </Text>
-              <Text style={[styles.chipText, (gymGroupOpen || gymActive) && styles.chipTextSelected]}>
+              <Text style={[styles.chipText, (gymGroupOpen || active) && styles.chipTextSelected]}>
                 {gymGroupOpen ? ' ▲' : ' ▼'}
               </Text>
             </TouchableOpacity>
           );
         })()}
 
-        {/* All other categories (excluding gym-group members — shown in sub-row) */}
+        {/* Martial Arts */}
+        {(() => {
+          const active = categoryFilter !== null && MARTIAL_ARTS_GROUP_IDS.includes(categoryFilter);
+          return (
+            <TouchableOpacity
+              style={[styles.chip, (martialArtsOpen || active) && styles.chipSelected]}
+              onPress={() => {
+                const next = !martialArtsOpen;
+                closeAllGroups();
+                setMartialArtsOpen(next);
+                if (active) setCategoryFilter(null);
+              }}
+            >
+              <Text style={[styles.chipText, (martialArtsOpen || active) && styles.chipTextSelected]}>
+                Martial Arts
+              </Text>
+              <Text style={[styles.chipText, (martialArtsOpen || active) && styles.chipTextSelected]}>
+                {martialArtsOpen ? ' ▲' : ' ▼'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Wellness */}
+        {(() => {
+          const active = categoryFilter !== null && WELLNESS_GROUP_IDS.includes(categoryFilter);
+          return (
+            <TouchableOpacity
+              style={[styles.chip, (wellnessOpen || active) && styles.chipSelected]}
+              onPress={() => {
+                const next = !wellnessOpen;
+                closeAllGroups();
+                setWellnessOpen(next);
+                if (active) setCategoryFilter(null);
+              }}
+            >
+              <Text style={[styles.chipText, (wellnessOpen || active) && styles.chipTextSelected]}>
+                Wellness
+              </Text>
+              <Text style={[styles.chipText, (wellnessOpen || active) && styles.chipTextSelected]}>
+                {wellnessOpen ? ' ▲' : ' ▼'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Sports */}
+        {(() => {
+          const active = categoryFilter !== null && SPORTS_GROUP_IDS.includes(categoryFilter);
+          return (
+            <TouchableOpacity
+              style={[styles.chip, (sportsOpen || active) && styles.chipSelected]}
+              onPress={() => {
+                const next = !sportsOpen;
+                closeAllGroups();
+                setSportsOpen(next);
+                if (active) setCategoryFilter(null);
+              }}
+            >
+              <Text style={[styles.chipText, (sportsOpen || active) && styles.chipTextSelected]}>
+                Sports
+              </Text>
+              <Text style={[styles.chipText, (sportsOpen || active) && styles.chipTextSelected]}>
+                {sportsOpen ? ' ▲' : ' ▼'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Pilates & Yoga */}
+        {(() => {
+          const active = categoryFilter !== null && PILATES_YOGA_GROUP_IDS.includes(categoryFilter);
+          return (
+            <TouchableOpacity
+              style={[styles.chip, (pilatesYogaOpen || active) && styles.chipSelected]}
+              onPress={() => {
+                const next = !pilatesYogaOpen;
+                closeAllGroups();
+                setPilatesYogaOpen(next);
+                if (active) setCategoryFilter(null);
+              }}
+            >
+              <Text style={[styles.chipText, (pilatesYogaOpen || active) && styles.chipTextSelected]}>
+                Pilates & Yoga
+              </Text>
+              <Text style={[styles.chipText, (pilatesYogaOpen || active) && styles.chipTextSelected]}>
+                {pilatesYogaOpen ? ' ▲' : ' ▼'}
+              </Text>
+            </TouchableOpacity>
+          );
+        })()}
+
+        {/* Remaining ungrouped categories */}
         {categoryFilters
-          .filter((f) => !GYM_GROUP_IDS.includes(f.id))
+          .filter((f) => !ALL_GROUP_IDS.includes(f.id))
           .map((f) => {
             const selected = categoryFilter === f.id;
             return (
               <TouchableOpacity
                 key={f.id}
                 style={[styles.chip, selected && styles.chipSelected]}
-                onPress={() => { setCategoryFilter(selected ? null : f.id); setGymGroupOpen(false); }}
+                onPress={() => { setCategoryFilter(selected ? null : f.id); closeAllGroups(); }}
               >
                 <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
                   {f.displayName}
@@ -255,33 +366,93 @@ export default function ExploreScreen() {
           })}
       </ScrollView>
 
-      {/* Row 4 — Gym sub-categories (visible only when group is expanded) */}
+      {/* Sub-row — Gym & Fitness */}
       {gymGroupOpen && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.categoryChips}
-          style={styles.gymSubRow}
-        >
-          {categoryFilters
-            .filter((f) => GYM_GROUP_IDS.includes(f.id))
-            .map((f) => {
-              const selected = categoryFilter === f.id;
-              return (
-                <TouchableOpacity
-                  key={f.id}
-                  style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
-                  onPress={() => setCategoryFilter(selected ? null : f.id)}
-                >
-                  <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
-                    {f.displayName}
-                  </Text>
-                  <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
-                    {categoryCount(f.id)}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips} style={styles.gymSubRow}>
+          {categoryFilters.filter((f) => GYM_GROUP_IDS.includes(f.id)).map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity key={f.id}
+                style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                onPress={() => setCategoryFilter(selected ? null : f.id)}>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.displayName}</Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>{categoryCount(f.id)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sub-row — Martial Arts */}
+      {martialArtsOpen && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips} style={styles.gymSubRow}>
+          {categoryFilters.filter((f) => MARTIAL_ARTS_GROUP_IDS.includes(f.id)).map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity key={f.id}
+                style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                onPress={() => setCategoryFilter(selected ? null : f.id)}>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.displayName}</Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>{categoryCount(f.id)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sub-row — Wellness */}
+      {wellnessOpen && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips} style={styles.gymSubRow}>
+          {categoryFilters.filter((f) => WELLNESS_GROUP_IDS.includes(f.id)).map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity key={f.id}
+                style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                onPress={() => setCategoryFilter(selected ? null : f.id)}>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.displayName}</Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>{categoryCount(f.id)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sub-row — Sports */}
+      {sportsOpen && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips} style={styles.gymSubRow}>
+          {categoryFilters.filter((f) => SPORTS_GROUP_IDS.includes(f.id)).map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity key={f.id}
+                style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                onPress={() => setCategoryFilter(selected ? null : f.id)}>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.displayName}</Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>{categoryCount(f.id)}</Text>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
+
+      {/* Sub-row — Pilates & Yoga */}
+      {pilatesYogaOpen && (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryChips} style={styles.gymSubRow}>
+          {categoryFilters.filter((f) => PILATES_YOGA_GROUP_IDS.includes(f.id)).map((f) => {
+            const selected = categoryFilter === f.id;
+            return (
+              <TouchableOpacity key={f.id}
+                style={[styles.chip, styles.chipSub, selected && styles.chipSubSelected]}
+                onPress={() => setCategoryFilter(selected ? null : f.id)}>
+                <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.displayName}</Text>
+                <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>{categoryCount(f.id)}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </ScrollView>
       )}
     </>
