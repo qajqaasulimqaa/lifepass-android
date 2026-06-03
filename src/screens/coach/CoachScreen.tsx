@@ -674,6 +674,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingTop: 12,
+    marginBottom: 20,
   },
   categoryArrow: {
     width: 28,
