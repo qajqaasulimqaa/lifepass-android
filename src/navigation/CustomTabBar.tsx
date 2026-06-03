@@ -66,8 +66,6 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
         style={[styles.gradient, { height: BAR_HEIGHT + insets.bottom + 24 }]}
       />
 
-      {/* Hairline */}
-      <View style={[styles.hairline, { bottom: insets.bottom + BAR_HEIGHT - 20 }]} />
 
       <View style={[styles.row, { height: BAR_HEIGHT }]}>
         {LEFT_TABS.map((tab) => (
