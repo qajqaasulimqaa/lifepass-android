@@ -52,7 +52,8 @@
           "speechRecognitionPermission": "Allow LifePass to use speech recognition so you can speak to your wellness coach."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-font"
     ]
   }
 }
