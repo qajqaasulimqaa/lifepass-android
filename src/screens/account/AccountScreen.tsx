@@ -69,12 +69,19 @@ export default function AccountScreen() {
   }
 
   function handleDelete() {
+    // Matches iOS: deletion is completed in the web account area. (Apple
+    // 5.1.1(v) requires the button to reach a working delete flow — the old
+    // handler just signed out, deleting nothing.) Send the user to log in on
+    // the website, where they can delete their account and all data.
     Alert.alert(
       'Delete account',
-      'This will permanently delete your account and all data. This cannot be undone.',
+      "To delete your account, log in on our website. You'll be taken there now.",
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: () => signOut() },
+        {
+          text: 'Continue',
+          onPress: () => Linking.openURL('https://www.lifepass.is/auth'),
+        },
       ],
     );
   }
