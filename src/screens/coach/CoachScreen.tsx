@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, type ComponentType } from 'react';
 import {
   View,
   Text,
@@ -15,11 +15,6 @@ import {
   Keyboard,
   Dimensions,
 } from 'react-native';
-// MIC UNWIRED — restore before launch
-// import {
-//   ExpoSpeechRecognitionModule,
-//   useSpeechRecognitionEvent,
-// } from 'expo-speech-recognition';
 import * as Location from 'expo-location';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -65,6 +60,18 @@ import QuestionBubbleMessage from './QuestionBubbleMessage';
 let idCounter = 100;
 const nextId = () => String(++idCounter);
 
+// Voice dictation lives in a separate module so its native import (which
+// THROWS in Expo Go, where the speech native module is absent) only ever
+// evaluates when that module is actually present. Null in Expo Go / web →
+// the mic button is simply hidden; wired for real in a dev/production build.
+type MicButtonComponent = ComponentType<{ onTranscript: (text: string) => void }>;
+let MicButton: MicButtonComponent | null = null;
+try {
+  MicButton = require('./MicButton').default as MicButtonComponent;
+} catch {
+  MicButton = null;
+}
+
 
 export default function CoachScreen() {
   const insets = useSafeAreaInsets();
@@ -95,7 +102,6 @@ export default function CoachScreen() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const categoryScrollRef = useRef<ScrollView | null>(null);
   const autoSentRef = useRef(false);
@@ -528,11 +534,6 @@ export default function CoachScreen() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [prefilledMessage]);
 
-  // MIC UNWIRED — restore before launch
-  function handleMicPress() {
-    // no-op until mic is rewired
-  }
-
   /** Snapshot the live conversation into RECENTS (no-op before the first
    *  user message). Mirrors iOS persistCurrentSession(). */
   async function persistCurrentSession() {
@@ -759,19 +760,11 @@ export default function CoachScreen() {
               >
                 <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
               </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                style={[styles.micContainer, isListening && styles.micContainerActive]}
-                onPress={handleMicPress}
-                activeOpacity={0.7}
-              >
-                <Ionicons
-                  name={isListening ? 'mic' : 'mic-outline'}
-                  size={22}
-                  color={isListening ? colors.skyBlue : 'rgba(255,255,255,0.55)'}
-                />
-              </TouchableOpacity>
-            )}
+            ) : MicButton ? (
+              // Voice dictation — only present in dev/production builds (hidden
+              // in Expo Go, where the speech native module isn't available).
+              <MicButton onTranscript={setInput} />
+            ) : null}
           </View>
         </View>
       </ImageBackground>
@@ -909,18 +902,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  micContainer: {
-    width: 42, height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 21,
-  },
-  micContainerActive: {
-    backgroundColor: 'rgba(168,216,240,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(168,216,240,0.35)',
-  },
-
   // Category image strip — pinned just above input bar
   categoryScroll: {
     gap: 12,
