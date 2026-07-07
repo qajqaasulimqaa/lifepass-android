@@ -1,5 +1,7 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors } from '../theme';
+import BookItPill from './BookItPill';
+import { priceLabel, isPremium } from '../types/venue';
 import type { Venue } from '../types/venue';
 
 type Props = {
@@ -11,13 +13,21 @@ export default function NearbyVenueCard({ venue }: Props) {
     <View style={styles.card}>
       <View style={styles.imageWrapper}>
         <Image source={{ uri: venue.imageUrl }} style={styles.image} />
-        <View style={styles.creditBadge}>
-          <Text style={styles.creditText}>{venue.creditCost} cr</Text>
+        {/* "Included" / "from ISK X" marker — same overlay as the iOS card */}
+        <View style={styles.priceBadge}>
+          <Text
+            style={[styles.priceText, { color: isPremium(venue) ? colors.skyBlue : colors.moss }]}
+          >
+            {priceLabel(venue)}
+          </Text>
         </View>
       </View>
       <View style={styles.info}>
-        <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
-        <Text style={styles.city} numberOfLines={1}>{venue.city}</Text>
+        <View style={styles.infoText}>
+          <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
+          <Text style={styles.city} numberOfLines={1}>{venue.city}</Text>
+        </View>
+        <BookItPill fullWidth />
       </View>
     </View>
   );
@@ -40,7 +50,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  creditBadge: {
+  priceBadge: {
     position: 'absolute',
     top: 8,
     right: 8,
@@ -49,22 +59,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
   },
-  creditText: {
+  priceText: {
     fontSize: 10,
     fontWeight: '700',
-    color: colors.skyBlue,
     letterSpacing: 0.5,
   },
   info: {
     paddingHorizontal: 12,
     paddingVertical: 12,
+    gap: 8,
+  },
+  infoText: {
+    gap: 3,
   },
   name: {
     fontSize: 14,
     fontWeight: '600',
     color: colors.paper,
     letterSpacing: -0.1,
-    marginBottom: 3,
   },
   city: {
     fontSize: 11,

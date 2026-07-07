@@ -3,12 +3,13 @@ import type { SuggestionChip } from '../../data/mockCoach';
 
 type Props = {
   chips: SuggestionChip[];
-  onSelect: (prompt: string) => void;
+  onSelect: (chip: SuggestionChip) => void;
 };
 
 /**
  * 2×2 grid of frosted-glass suggestion chips shown in the Coach empty state.
- * The 4 chips passed in are pre-selected by the activity-based selector in mockCoach.
+ * Same four chips as iOS; the caller decides whether a chip sends a prompt
+ * or shows the category strip (chip.showsCategoryStrip).
  */
 export default function SuggestionChips({ chips, onSelect }: Props) {
   return (
@@ -18,7 +19,7 @@ export default function SuggestionChips({ chips, onSelect }: Props) {
           key={chip.id}
           style={styles.chip}
           activeOpacity={0.7}
-          onPress={() => onSelect(chip.prompt)}
+          onPress={() => onSelect(chip)}
         >
           <Text style={styles.label} numberOfLines={1}>
             {chip.text}

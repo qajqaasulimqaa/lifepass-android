@@ -3,6 +3,7 @@
     "name": "LifePass",
     "slug": "lifepass-app",
     "version": "1.0.0",
+    "scheme": "lifepass",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -28,7 +29,9 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "permissions": ["android.permission.ACCESS_COARSE_LOCATION"]
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -48,7 +51,8 @@
           "microphonePermission": "Allow LifePass to use the microphone for voice input.",
           "speechRecognitionPermission": "Allow LifePass to use speech recognition so you can speak to your wellness coach."
         }
-      ]
+      ],
+      "expo-web-browser"
     ]
   }
 }

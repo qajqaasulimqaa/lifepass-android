@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WaveIcon from '../../components/WaveIcon';
+import PricePill from '../../components/PricePill';
 import { colors } from '../../theme';
 import type { VenueCard } from '../../types/coach';
 
@@ -47,8 +48,23 @@ function VenueCardItem({ venue, width, onOtherIdeas, onBook }: CardProps) {
 
       {/* Content */}
       <View style={card.body}>
-        {/* Credits */}
-        <Text style={card.credits}>{venue.creditCost} CREDITS</Text>
+        {/* "Included" / "from ISK X" — only when the card carries real
+            venue pricing (credits are gone backend-side). */}
+        {venue.inBundle !== undefined && (
+          <View style={card.priceRow}>
+            <PricePill
+              venue={{
+                inBundle: venue.inBundle,
+                surchargePrice: venue.surchargePrice,
+                resolvedSurchargePrice: venue.resolvedSurchargePrice,
+                topupPrice: venue.topupPrice,
+                daypassPrice: venue.daypassPrice,
+                primaryCategory: venue.primaryCategory,
+              }}
+              compact
+            />
+          </View>
+        )}
 
         {/* Name */}
         <View style={card.nameRow}>
@@ -233,11 +249,9 @@ const card = StyleSheet.create({
     gap: 3,
   },
 
-  credits: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: colors.paper3,
-    letterSpacing: 0.5,
+  priceRow: {
+    flexDirection: 'row',
+    marginBottom: 2,
   },
 
   nameRow: {

@@ -15,153 +15,90 @@ import { colors } from '../../theme';
 import Kicker from '../../components/Kicker';
 import PrimaryButton from '../../components/PrimaryButton';
 
-// ─── Plan data (mirrors iOS Plan.swift) ───────────────────────────────────────
+// ─── Plan data (mirrors iOS Plan.swift — v1 product catalogue) ────────────────
+//
+// Keyed by the real v1 product slug (what POST /payments/checkout-sessions
+// accepts). The hosted checkout page owns the price, so the app never
+// displays an ISK figure. Credits and luxury were removed in v1; plans are
+// tier allowances + premium surcharge, passes are prepaid visit packs.
 
 type Plan = {
-  id: string;
-  name: string;          // Full display name
-  shortName: string;     // 'S' / 'M' / 'L' / 'XL'  or  marketing name for visitors
+  id: string;           // v1 product slug (the checkout productSlug)
+  name: string;
   subtitle: string;
-  priceISK: number;
-  totalCredits: number;
-  dailyLimit: number;
-  hasLuxury: boolean;
-  luxuryVisitCap: number | null; // null = uncapped (visitors)
+  features: string[];   // qualitative — no fabricated credits/prices
   isPopular: boolean;
-  isLuxury: boolean;
-  commitmentMonths: number;
   isSubscription: boolean;
 };
 
 const SUBSCRIPTION_PLANS: Plan[] = [
   {
-    id: 'plan-s',
-    name: 'Plan S',
-    shortName: 'S',
-    subtitle: 'Regular routine',
-    priceISK: 14_900,
-    totalCredits: 14,
-    dailyLimit: 1,
-    hasLuxury: false,
-    luxuryVisitCap: null,
+    id: 'plan-base',
+    name: 'Base',
+    subtitle: 'Get started',
+    features: [
+      'Monthly gym, studio & pool visits',
+      'In-bundle venues included',
+      'Premium venues pay-as-you-go',
+      'Cancel after 3 months',
+    ],
     isPopular: false,
-    isLuxury: false,
-    commitmentMonths: 3,
     isSubscription: true,
   },
   {
-    id: 'plan-m',
-    name: 'Plan M',
-    shortName: 'M',
-    subtitle: 'Active lifestyles, basic venues',
-    priceISK: 25_500,
-    totalCredits: 25,
-    dailyLimit: 1,
-    hasLuxury: false,
-    luxuryVisitCap: null,
-    isPopular: false,
-    isLuxury: false,
-    commitmentMonths: 3,
-    isSubscription: true,
-  },
-  {
-    id: 'plan-l',
-    name: 'Plan L',
-    shortName: 'L',
-    subtitle: 'Luxury access',
-    priceISK: 36_900,
-    totalCredits: 36,
-    dailyLimit: 1/2,
-    hasLuxury: true,
-    luxuryVisitCap: 6,
+    id: 'plan-plus',
+    name: 'Plus',
+    subtitle: 'The regular',
+    features: [
+      'More monthly visits than Base',
+      'Member discount at premium venues',
+      'In-bundle venues included',
+      'Cancel after 3 months',
+    ],
     isPopular: true,
-    isLuxury: true,
-    commitmentMonths: 3,
     isSubscription: true,
   },
   {
-    id: 'plan-xl',
-    name: 'Plan XL',
-    shortName: 'XL',
-    subtitle: 'Maximum access to all facilities',
-    priceISK: 65_900,
-    totalCredits: 65,
-    dailyLimit: 3,
-    hasLuxury: true,
-    luxuryVisitCap: 15,
+    id: 'plan-max',
+    name: 'Max',
+    subtitle: 'Maximum access',
+    features: [
+      'The most monthly visits',
+      'Best member discount at premium venues',
+      'In-bundle venues included',
+      'Cancel after 3 months',
+    ],
     isPopular: false,
-    isLuxury: true,
-    commitmentMonths: 3,
     isSubscription: true,
   },
 ];
 
-const VISITOR_PLANS: Plan[] = [
+const VISITOR_PASSES: Plan[] = [
   {
-    id: 'starter',
-    name: 'LayOver',
-    shortName: 'LayOver',
-    subtitle: 'Weekend wellness escape',
-    priceISK: 10_900,
-    totalCredits: 7,
-    dailyLimit: 1,
-    hasLuxury: true,
-    luxuryVisitCap: null,
+    id: 'pass-explorer',
+    name: 'Explorer',
+    subtitle: 'A taste of LifePass',
+    features: ['3 visits', 'Valid 30 days', 'Use across in-bundle venues'],
     isPopular: false,
-    isLuxury: false,
-    commitmentMonths: 0,
     isSubscription: false,
   },
   {
-    id: 'explorer',
-    name: 'Week Warrior',
-    shortName: 'Week Warrior',
-    subtitle: 'Weekly wellness adventure',
-    priceISK: 20_500,
-    totalCredits: 17,
-    dailyLimit: 1,
-    hasLuxury: true,
-    luxuryVisitCap: null,
+    id: 'pass-adventurer',
+    name: 'Adventurer',
+    subtitle: 'A proper stay',
+    features: ['6 visits', 'Valid 60 days', 'Use across in-bundle venues'],
     isPopular: true,
-    isLuxury: false,
-    commitmentMonths: 0,
     isSubscription: false,
   },
   {
-    id: 'wellness',
-    name: 'Extended Stay',
-    shortName: 'Extended Stay',
-    subtitle: 'Extended wellness journey',
-    priceISK: 37_500,
-    totalCredits: 30,
-    dailyLimit: 2,
-    hasLuxury: true,
-    luxuryVisitCap: null,
+    id: 'pass-local',
+    name: 'Local',
+    subtitle: 'Make it a habit',
+    features: ['12 visits', 'Valid 90 days', 'Use across in-bundle venues'],
     isPopular: false,
-    isLuxury: true,
-    commitmentMonths: 0,
-    isSubscription: false,
-  },
-  {
-    id: 'ultimate',
-    name: 'Becoming a Local',
-    shortName: 'Becoming a Local',
-    subtitle: 'Unlimited wellness experience',
-    priceISK: 55_500,
-    totalCredits: 46,
-    dailyLimit: 3,
-    hasLuxury: true,
-    luxuryVisitCap: null,
-    isPopular: false,
-    isLuxury: true,
-    commitmentMonths: 0,
     isSubscription: false,
   },
 ];
-
-function formatISK(value: number): string {
-  return value.toLocaleString('en-US').replace(/,/g, ',');
-}
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -169,16 +106,16 @@ export default function TopUpScreen() {
   const insets = useSafeAreaInsets();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<any>();
-  const [tab, setTab] = useState<0 | 1>(0); // 0 = Monthly, 1 = One-off
-  const [selectedId, setSelectedId] = useState<string>('plan-l');
+  const [tab, setTab] = useState<0 | 1>(0); // 0 = Monthly plans, 1 = Visitor passes
+  const [selectedId, setSelectedId] = useState<string>('plan-plus');
 
-  const plans = tab === 0 ? SUBSCRIPTION_PLANS : VISITOR_PLANS;
+  const plans = tab === 0 ? SUBSCRIPTION_PLANS : VISITOR_PASSES;
   const selectedPlan = plans.find((p) => p.id === selectedId) ?? plans[0];
 
   // When switching tabs, default to the most popular plan in that category
   function switchTab(next: 0 | 1) {
     setTab(next);
-    const nextPlans = next === 0 ? SUBSCRIPTION_PLANS : VISITOR_PLANS;
+    const nextPlans = next === 0 ? SUBSCRIPTION_PLANS : VISITOR_PASSES;
     const popular = nextPlans.find((p) => p.isPopular) ?? nextPlans[0];
     setSelectedId(popular.id);
   }
@@ -186,7 +123,7 @@ export default function TopUpScreen() {
   function handleContinue() {
     Alert.alert(
       `Continue with ${selectedPlan.name}`,
-      `${formatISK(selectedPlan.priceISK)} ISK${selectedPlan.isSubscription ? '/month' : ' one-time'}\n\nCheckout will open in your browser.`,
+      'The price is shown securely at checkout.\n\nCheckout will open in your browser.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -223,18 +160,18 @@ export default function TopUpScreen() {
         {/* Headline */}
         <View style={styles.headline}>
           <View style={styles.headlineTitleBlock}>
-            <Text style={styles.headlineBig}>Pay per visit</Text>
+            <Text style={styles.headlineBig}>Pay per visit,</Text>
             <Text style={styles.headlineSmall}>or per month.</Text>
           </View>
           <Text style={styles.headlineSub}>
-            You choose how you want to top up your credits. Monthly plans are great for locals and long-term visitors. Weekly plans are perfect for short stays.
+            Pick a monthly plan or a prepaid visitor pass. The price is shown securely at checkout.
           </Text>
         </View>
 
         {/* Segment toggle */}
         <View style={styles.segmentWrap}>
-          <SegmentButton label="Monthly" active={tab === 0} onPress={() => switchTab(0)} />
-          <SegmentButton label="Weekly" active={tab === 1} onPress={() => switchTab(1)} />
+          <SegmentButton label="Monthly plans" active={tab === 0} onPress={() => switchTab(0)} />
+          <SegmentButton label="Visitor passes" active={tab === 1} onPress={() => switchTab(1)} />
         </View>
 
         {/* Plan cards */}
@@ -253,18 +190,18 @@ export default function TopUpScreen() {
         <View style={styles.finePrintRow}>
           <View style={styles.dotRow}>
             <View style={[styles.dot, { backgroundColor: colors.blue }]} />
-            <Text style={styles.finePrintText}>Classic → Basic venues</Text>
+            <Text style={styles.finePrintText}>In-bundle venues included</Text>
           </View>
           <View style={styles.dotRow}>
             <View style={[styles.dot, { backgroundColor: colors.skyBlue }]} />
-            <Text style={styles.finePrintText}>Luxury → All venues</Text>
+            <Text style={styles.finePrintText}>Premium venues pay-as-you-go</Text>
           </View>
         </View>
 
         <Text style={styles.commitment}>
           {selectedPlan.isSubscription
-            ? '3-month commitment · Credits renew monthly · Cancel anytime after'
-            : 'Credits expire 30 days after purchase · No rollovers · Luxury included'}
+            ? 'Monthly subscription · 3-month minimum · Cancel anytime after · Price shown at checkout'
+            : 'Prepaid visit pack · Price shown at checkout'}
         </Text>
       </ScrollView>
 
@@ -272,7 +209,7 @@ export default function TopUpScreen() {
       <View style={[styles.cta, { bottom: tabBarHeight + 36 }]}>
         <PrimaryButton
           block={false}
-          title={`Continue with ${selectedPlan.shortName} →`}
+          title={`Continue with ${selectedPlan.name} →`}
           onPress={handleContinue}
         />
       </View>
@@ -326,12 +263,6 @@ function PlanCard({
   selected: boolean;
   onPress: () => void;
 }) {
-  const priceTrail = plan.isSubscription ? '/mo' : 'one-time';
-  const showBadge = plan.isPopular || plan.isLuxury;
-  const badgeText = plan.isPopular ? 'MOST POPULAR' : 'LUXURY';
-  const badgeBg = plan.isPopular ? colors.blue : colors.skyBlue;
-  const badgeTextColor = plan.isPopular ? '#FFFFFF' : colors.ink;
-
   return (
     <TouchableOpacity
       style={[
@@ -343,39 +274,30 @@ function PlanCard({
       activeOpacity={0.85}
     >
       {/* Badge */}
-      {showBadge && (
-        <View style={[cardStyles.badge, { backgroundColor: badgeBg }]}>
-          <Text style={[cardStyles.badgeText, { color: badgeTextColor }]}>{badgeText}</Text>
+      {plan.isPopular && (
+        <View style={cardStyles.badge}>
+          <Text style={cardStyles.badgeText}>MOST POPULAR</Text>
         </View>
       )}
 
-      {/* Top row: letter + subtitle + price */}
+      {/* Top row: name + subtitle */}
       <View style={cardStyles.topRow}>
         <View style={cardStyles.nameBlock}>
-          <Text style={cardStyles.letter}>{plan.shortName}</Text>
+          <Text style={cardStyles.letter}>{plan.name}</Text>
           <Text style={cardStyles.subtitle} numberOfLines={1}>
             {plan.subtitle}
           </Text>
         </View>
-        <View style={cardStyles.priceBlock}>
-          <Text style={cardStyles.price}>{formatISK(plan.priceISK)}</Text>
-          <Text style={cardStyles.priceTrail}>ISK {priceTrail}</Text>
-        </View>
       </View>
 
-      {/* Bottom row: credits · daily limit · luxury */}
-      <View style={cardStyles.bottomRow}>
-        <Text style={cardStyles.credits}>{plan.totalCredits}</Text>
-        <Text style={cardStyles.creditsLabel}> credits</Text>
-        <Text style={cardStyles.sep}> · </Text>
-        <Text style={cardStyles.detail}>{plan.dailyLimit} facilit{plan.dailyLimit === 1 ? 'y' : 'ies'} a day</Text>
-        {plan.hasLuxury && (
-          <>
-            <Text style={cardStyles.sep}> · </Text>
-            <Ionicons name="sparkles" size={11} color={colors.skyBlue} />
-            <Text style={cardStyles.luxury}> Luxury venues</Text>
-          </>
-        )}
+      {/* Features */}
+      <View style={cardStyles.features}>
+        {plan.features.map((feature) => (
+          <View key={feature} style={cardStyles.featureRow}>
+            <Ionicons name="checkmark" size={12} color={colors.blueMid} />
+            <Text style={cardStyles.featureText}>{feature}</Text>
+          </View>
+        ))}
       </View>
     </TouchableOpacity>
   );
@@ -406,11 +328,13 @@ const cardStyles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 4,
+    backgroundColor: colors.blue,
   },
   badgeText: {
     fontSize: 9,
     fontWeight: '700',
     letterSpacing: 1.2,
+    color: '#FFFFFF',
   },
   topRow: {
     flexDirection: 'row',
@@ -426,18 +350,13 @@ const cardStyles = StyleSheet.create({
     lineHeight: 38,
   },
   subtitle: { fontSize: 13, color: colors.paper3 },
-  priceBlock: { alignItems: 'flex-end', gap: 1 },
-  price: { fontSize: 15, fontWeight: '600', color: colors.paper },
-  priceTrail: { fontSize: 11, color: colors.paper3 },
-  bottomRow: {
+  features: { gap: 6 },
+  featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 8,
   },
-  credits: { fontSize: 13, fontWeight: '700', color: colors.blue },
-  creditsLabel: { fontSize: 12, color: colors.paper3 },
-  sep: { fontSize: 12, color: colors.paper3 },
-  detail: { fontSize: 12, color: colors.paper3 },
-  luxury: { fontSize: 12, color: colors.skyBlue, fontWeight: '500' },
+  featureText: { fontSize: 12.5, color: colors.paper2, lineHeight: 18 },
 });
 
 // ─── Main styles ──────────────────────────────────────────────────────────────

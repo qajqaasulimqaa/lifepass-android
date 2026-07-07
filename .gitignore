@@ -30,9 +30,16 @@ yarn-error.*
 .DS_Store
 *.pem
 
+# IDE
+.idea/
+.vscode/
+
 # local env files
 .env*.local
 .env
+
+# coach local rate-limit store
+.coach-usage.json
 
 # typescript
 *.tsbuildinfo

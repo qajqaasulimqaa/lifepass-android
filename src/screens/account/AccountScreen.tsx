@@ -11,97 +11,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Svg, { Circle as SvgCircle } from 'react-native-svg';
 import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import {
-  totalCredits,
   hasLuxuryAccess,
   planDisplayName,
 } from '../../supabase/types/subscription';
 import Kicker from '../../components/Kicker';
-
-// Plan quotas — mirrors Plan.swift static catalogue
-const PLAN_QUOTAS: Record<string, number> = {
-  'plan-s':   14,
-  'plan-m':   25,
-  'plan-l':   36,
-  'plan-xl':  65,
-  'starter':   7,
-  'explorer': 17,
-  'wellness': 30,
-  'ultimate': 46,
-};
-
-// ─── Credit ring (SVG arc, matches iOS ZStack trim approach) ──────────────────
-
-function CreditRing({
-  credits,
-  quota,
-  size = 90,
-  stroke = 4,
-}: {
-  credits: number;
-  quota: number;
-  size?: number;
-  stroke?: number;
-}) {
-  const r = (size - stroke) / 2;
-  const circumference = 2 * Math.PI * r;
-  const fraction = Math.min(Math.max(credits / Math.max(quota, 1), 0), 1);
-  const offset = circumference * (1 - fraction);
-
-  return (
-    <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
-      {/* SVG ring — rotated so arc starts at top (−90°) */}
-      <Svg
-        width={size}
-        height={size}
-        style={{ position: 'absolute', transform: [{ rotate: '-90deg' }] }}
-      >
-        {/* Track */}
-        <SvgCircle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke="rgba(230,242,255,0.1)"
-          strokeWidth={stroke}
-          fill="none"
-        />
-        {/* Progress arc */}
-        <SvgCircle
-          cx={size / 2} cy={size / 2} r={r}
-          stroke={colors.skyBlue}
-          strokeWidth={stroke}
-          fill="none"
-          strokeDasharray={`${circumference} ${circumference}`}
-          strokeDashoffset={offset}
-          strokeLinecap="round"
-        />
-      </Svg>
-      {/* Inner label */}
-      <Text style={ringStyles.number}>{credits}</Text>
-      <Text style={ringStyles.of}>of {quota}</Text>
-    </View>
-  );
-}
-
-const ringStyles = StyleSheet.create({
-  number: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: colors.paper,
-    letterSpacing: -0.8,
-    lineHeight: 28,
-  },
-  of: {
-    fontSize: 9,
-    fontWeight: '600',
-    letterSpacing: 0.8,
-    color: colors.paper3,
-    textTransform: 'uppercase',
-  },
-});
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -116,12 +34,8 @@ export default function AccountScreen() {
   const email = user?.email ?? '';
   const initial = displayName.charAt(0).toUpperCase();
 
-  const credits = subscription ? totalCredits(subscription) : 0;
   const planName = subscription ? planDisplayName(subscription) : null;
   const luxuryAccess = subscription ? hasLuxuryAccess(subscription) : false;
-
-  const planId = (subscription as any)?.plan ?? '';
-  const planQuota = PLAN_QUOTAS[planId] ?? Math.max(credits, 1);
 
   const daysLeft = subscription?.expires_at
     ? Math.max(
@@ -211,7 +125,7 @@ export default function AccountScreen() {
             </View>
           </View>
 
-          {/* Credit ring + text row */}
+          {/* Plan summary row — v1 has no credit balance (ring removed) */}
           <View style={memberCard.creditRow}>
             {subLoading ? (
               <View style={{ height: 90, justifyContent: 'center' }}>
@@ -219,16 +133,11 @@ export default function AccountScreen() {
               </View>
             ) : (
               <>
-                <CreditRing credits={credits} quota={planQuota} />
-
                 <View style={memberCard.creditText}>
-                  {planName && (
-                    <Kicker text={`Plan · ${planName}`} color={colors.paper2} />
-                  )}
-                  <Text style={memberCard.creditsLine}>
-                    <Text style={memberCard.creditsBold}>{credits} credits left</Text>
-                    <Text style={memberCard.creditsItalic}>, this month</Text>
-                  </Text>
+                  <Kicker
+                    text={planName ? `Plan · ${planName}` : 'No active plan'}
+                    color={colors.paper2}
+                  />
                   {renewalLabel && (
                     <Text style={memberCard.renewal}>{renewalLabel}</Text>
                   )}
@@ -260,8 +169,6 @@ export default function AccountScreen() {
             />
             <RowDivider />
             <Row title="Purchase history" onPress={() => {}} />
-            <RowDivider />
-            <Row title="Credit history" subtitle={`${credits} cr available`} onPress={() => {}} />
           </View>
         </View>
 
@@ -476,18 +383,6 @@ const memberCard = StyleSheet.create({
   creditText: {
     flex: 1,
     gap: 5,
-  },
-  creditsLine: {
-    fontSize: 18,
-    lineHeight: 24,
-  },
-  creditsBold: {
-    fontWeight: '600',
-    color: colors.paper,
-  },
-  creditsItalic: {
-    fontStyle: 'italic',
-    color: colors.paper2,
   },
   renewal: {
     fontSize: 11,

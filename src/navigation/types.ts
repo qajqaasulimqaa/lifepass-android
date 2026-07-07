@@ -29,7 +29,8 @@ export type CoachStackParamList = {
 };
 
 export type BookingsStackParamList = SharedTabRoutes & {
-  BookingsMain: undefined;
+  /** `initialTab: 'saved'` deep-links straight to the Saved tab (Coach drawer). */
+  BookingsMain: { initialTab?: 'bookings' | 'saved' } | undefined;
 };
 
 export type CheckInStackParamList = {

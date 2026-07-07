@@ -1,6 +1,7 @@
 import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors } from '../theme';
-import CreditPill from './CreditPill';
+import BookItPill from './BookItPill';
+import PricePill from './PricePill';
 import type { Venue } from '../types/venue';
 
 type Props = {
@@ -24,7 +25,11 @@ export default function CuratedVenueRow({ venue }: Props) {
           </View>
         )}
       </View>
-      <CreditPill credits={venue.creditCost} compact />
+      {/* Price marker + CTA, trailing-aligned like the iOS row */}
+      <View style={styles.right}>
+        <PricePill venue={venue} compact />
+        <BookItPill />
+      </View>
     </View>
   );
 }
@@ -74,5 +79,9 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: colors.paper2,
     letterSpacing: 0.4,
+  },
+  right: {
+    alignItems: 'flex-end',
+    gap: 8,
   },
 });

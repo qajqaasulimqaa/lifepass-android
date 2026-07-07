@@ -14,6 +14,15 @@ export interface VenueCard {
   imageUrl: string;
   creditCost: number;
   category: string;
+  // v1 pricing (present when the card was resolved from a real venue;
+  // absent on cards parsed straight from the AI reply) — drives the
+  // "Included" / "from ISK X" pill, same as the iOS coach cards.
+  inBundle?: boolean;
+  surchargePrice?: number;
+  resolvedSurchargePrice?: number;
+  topupPrice?: number;
+  daypassPrice?: number;
+  primaryCategory?: string;
 }
 
 export interface CoachReply {

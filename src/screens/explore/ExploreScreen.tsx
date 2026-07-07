@@ -24,28 +24,31 @@ import { useSubscription } from '../../supabase/hooks/useSubscription';
 import {
   categoryFilters,
   matchesCategory,
-  matchesCreditRange,
   GYM_GROUP_IDS,
   MARTIAL_ARTS_GROUP_IDS,
   WELLNESS_GROUP_IDS,
   SPORTS_GROUP_IDS,
   PILATES_YOGA_GROUP_IDS,
   ALL_GROUP_IDS,
-  CREDIT_FILTERS,
-  type CreditRange,
 } from '../../data/categories';
 import CreditPill from '../../components/CreditPill';
+import PricePill from '../../components/PricePill';
 import Kicker from '../../components/Kicker';
+import Wordmark from '../../components/Wordmark';
 import type { Venue } from '../../types/venue';
+import { isPremium } from '../../types/venue';
 
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 type Presentation = 'map' | 'list';
-type ClassFilter = 'all' | 'basic' | 'luxury';
+// v1 access model: a venue is either inside the tier bundle ("In your plan",
+// free within the monthly cap) or premium (à-la-carte surcharge). Replaces the
+// old Basic/Luxury + credit-range filters — mirrors the iOS ClassFilter.
+type PlanFilter = 'all' | 'inPlan' | 'premium';
 
-const CLASS_FILTERS: { id: ClassFilter; label: string }[] = [
+const PLAN_FILTERS: { id: PlanFilter; label: string }[] = [
   { id: 'all', label: 'All' },
-  { id: 'basic', label: 'Basic' },
-  { id: 'luxury', label: 'Luxury' },
+  { id: 'inPlan', label: 'In your plan' },
+  { id: 'premium', label: 'Premium' },
 ];
 
 const REYKJAVIK = {
@@ -86,9 +89,10 @@ export default function ExploreScreen() {
   const { credits } = useSubscription();
 
   const [search, setSearch] = useState('');
-  const [classFilter, setClassFilter] = useState<ClassFilter>('all');
-  const [creditFilter, setCreditFilter] = useState<CreditRange>('all');
+  const [planFilter, setPlanFilter] = useState<PlanFilter>('all');
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  // Filter rows are collapsed by default behind the "Filters" toggle (iOS parity).
+  const [showFilters, setShowFilters] = useState(false);
   const [gymGroupOpen, setGymGroupOpen] = useState(false);
   const [martialArtsOpen, setMartialArtsOpen] = useState(false);
   const [wellnessOpen, setWellnessOpen] = useState(false);
@@ -113,18 +117,26 @@ export default function ExploreScreen() {
   const filtered = useMemo(() => {
     return venues.filter((v) => {
       if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
-      if (classFilter === 'basic' && v.classification === 'luxury') return false;
-      if (classFilter === 'luxury' && v.classification !== 'luxury') return false;
-      if (!matchesCreditRange(v.creditCost, creditFilter)) return false;
+      if (planFilter === 'inPlan' && !v.inBundle) return false;
+      if (planFilter === 'premium' && !isPremium(v)) return false;
       if (categoryFilter && !matchesCategory(v.category, categoryFilter)) return false;
       return true;
     });
-  }, [venues, search, classFilter, creditFilter, categoryFilter]);
+  }, [venues, search, planFilter, categoryFilter]);
 
-  function classCount(f: ClassFilter) {
+  function planCount(f: PlanFilter) {
     return venues.filter((v) =>
-      f === 'all' ? true : f === 'luxury' ? v.classification === 'luxury' : v.classification !== 'luxury'
+      f === 'all' ? true : f === 'inPlan' ? v.inBundle : isPremium(v)
     ).length;
+  }
+
+  // Count of non-default filters — drives the "Filters" badge and Clear action.
+  const activeFilterCount = (planFilter !== 'all' ? 1 : 0) + (categoryFilter !== null ? 1 : 0);
+
+  function clearFilters() {
+    setPlanFilter('all');
+    setCategoryFilter(null);
+    closeAllGroups();
   }
 
   function categoryCount(filterId: string) {
@@ -140,10 +152,7 @@ export default function ExploreScreen() {
     <>
       {/* Top bar */}
       <View style={styles.topBar}>
-        <Text style={styles.wordmark}>
-          <Text style={styles.wordmarkLife}>Life</Text>
-          <Text style={styles.wordmarkPass}>Pass</Text>
-        </Text>
+        <Wordmark height={17} />
         <View style={styles.topBarCenter}>
           <Kicker text="Explore" color={colors.paper2} />
           <Kicker text={`${filtered.length} venues`} color={colors.paper3} />
@@ -175,43 +184,68 @@ export default function ExploreScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Row 1 — Class: All / Basic / Luxury */}
+      {/* Filters toggle — collapses the plan + category rows (iOS parity) */}
+      <View style={styles.filterBar}>
+        <TouchableOpacity
+          style={[styles.filterButton, (showFilters || activeFilterCount > 0) && styles.filterButtonActive]}
+          onPress={() => setShowFilters((s) => !s)}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="options-outline"
+            size={13}
+            color={showFilters || activeFilterCount > 0 ? colors.ink : colors.paper2}
+          />
+          <Text
+            style={[
+              styles.filterButtonText,
+              (showFilters || activeFilterCount > 0) && styles.filterButtonTextActive,
+            ]}
+          >
+            Filters
+          </Text>
+          {activeFilterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
+            </View>
+          )}
+          <Ionicons
+            name={showFilters ? 'chevron-up' : 'chevron-down'}
+            size={11}
+            color={showFilters || activeFilterCount > 0 ? colors.ink : colors.paper2}
+          />
+        </TouchableOpacity>
+
+        {activeFilterCount > 0 && (
+          <TouchableOpacity onPress={clearFilters} activeOpacity={0.7}>
+            <Text style={styles.clearText}>Clear</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {showFilters && (
+        <>
+      {/* Plan: All / In your plan / Premium */}
       <View style={styles.classChips}>
-        {CLASS_FILTERS.map((f) => {
-          const selected = classFilter === f.id;
+        {PLAN_FILTERS.map((f) => {
+          const selected = planFilter === f.id;
           return (
             <TouchableOpacity
               key={f.id}
               style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => setClassFilter(f.id)}
+              onPress={() => setPlanFilter(f.id)}
             >
-              {f.id === 'luxury' && <View style={styles.luxuryDot} />}
+              {f.id === 'premium' && <View style={styles.luxuryDot} />}
               <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.label}</Text>
               <Text style={[styles.chipCount, selected && styles.chipTextSelected]}>
-                {classCount(f.id)}
+                {planCount(f.id)}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
 
-      {/* Row 2 — Credits: All / 1-2 / 3-5 / 6+ */}
-      <View style={styles.classChips}>
-        {CREDIT_FILTERS.map((f) => {
-          const selected = creditFilter === f.id;
-          return (
-            <TouchableOpacity
-              key={f.id}
-              style={[styles.chip, selected && styles.chipSelected]}
-              onPress={() => setCreditFilter(f.id)}
-            >
-              <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{f.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      {/* Row 3 — Category group dropdowns + flat chips */}
+      {/* Category group dropdowns + flat chips */}
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -455,6 +489,8 @@ export default function ExploreScreen() {
           })}
         </ScrollView>
       )}
+        </>
+      )}
     </>
   );
 
@@ -502,7 +538,7 @@ export default function ExploreScreen() {
               <Text style={styles.popupName} numberOfLines={1}>{selectedVenue.name}</Text>
               <Text style={styles.popupCity}>{selectedVenue.city}</Text>
             </View>
-            <CreditPill credits={selectedVenue.creditCost} compact />
+            <PricePill venue={selectedVenue} compact />
             <Text style={styles.popupArrow}>→</Text>
           </TouchableOpacity>
         )}
@@ -630,7 +666,7 @@ function ExploreListRow({ venue }: { venue: Venue }) {
           </View>
         )}
       </View>
-      <CreditPill credits={venue.creditCost} compact />
+      <PricePill venue={venue} compact />
     </View>
   );
 }
@@ -642,11 +678,27 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20, paddingVertical: 8,
     backgroundColor: colors.ink,
   },
-  wordmark: { fontSize: 18 },
-  wordmarkLife: { color: colors.paper, fontStyle: 'italic', fontWeight: '400' },
-  wordmarkPass: { color: colors.paper, fontWeight: '700' },
   topBarCenter: { alignItems: 'center', gap: 2 },
   searchRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 },
+  filterBar: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 20, paddingTop: 2, paddingBottom: 8,
+  },
+  filterButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingHorizontal: 14, paddingVertical: 8,
+    backgroundColor: colors.ink2, borderRadius: 999,
+    borderWidth: 1, borderColor: colors.line,
+  },
+  filterButtonActive: { backgroundColor: colors.paper, borderColor: colors.paper },
+  filterButtonText: { fontSize: 12.5, fontWeight: '600', color: colors.paper2, letterSpacing: -0.1 },
+  filterButtonTextActive: { color: colors.ink },
+  filterBadge: {
+    minWidth: 16, height: 16, borderRadius: 8, paddingHorizontal: 4,
+    backgroundColor: colors.blue, alignItems: 'center', justifyContent: 'center',
+  },
+  filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
+  clearText: { fontSize: 12, fontWeight: '500', color: colors.blue },
   searchField: {
     flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8,
     height: 44, paddingHorizontal: 14,

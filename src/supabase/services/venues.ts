@@ -1,10 +1,67 @@
 import { supabase } from '../lib/client';
+import { apiGet } from '../../api/client';
 import type { Venue as DbVenue, Activity as DbActivity, VenueReview as DbVenueReview, DayHours, OpeningHours as DbOpeningHours } from '../types/venue';
 import type { Venue, Activity, OpeningHours, OpeningHoursDay } from '../../types/venue';
 
-// ─── Adapter — DB snake_case → app camelCase ──────────────────────────────────
+// Venue reads go through the LifePass API (GET /venues), same as
+// lifepass-ios VenueService.swift — the API returns resolved image URLs
+// and caller-resolved ISK pricing (inBundle / surchargePrice / …).
+// Activities and reviews still read Supabase directly; they migrate to
+// the API together with the booking flow.
 
-function adaptDay(d: DayHours | null | undefined): OpeningHoursDay | undefined {
+// ─── Storage ──────────────────────────────────────────────────────────────────
+
+// Public bucket holding venue/activity images; used for activity rows,
+// which still come straight from the DB with relative storage paths.
+const STORAGE_BASE = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/storage/v1/object/public/venue-images`;
+
+function storageUrl(path: string | null | undefined): string | undefined {
+  if (!path) return undefined;
+  if (/^https?:\/\//i.test(path)) return path;
+  const encoded = path.split('/').map(encodeURIComponent).join('/');
+  return `${STORAGE_BASE}/${encoded}`;
+}
+
+// ─── API response shape (VenueSummary) ────────────────────────────────────────
+
+type ApiDayHours = { open?: string | null; close?: string | null; closed?: boolean | null };
+
+type ApiVenue = {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string | null;
+  descriptionIs?: string | null;
+  address?: string | null;
+  city?: string | null;
+  coordinates?: { latitude?: number | null; longitude?: number | null } | null;
+  imageUrl?: string | null;
+  categories?: string[] | null;
+  category?: string | null; // singular primary category
+  amenities?: string[] | null;
+  phone?: string | null;
+  openingHours?: Partial<Record<keyof OpeningHours, ApiDayHours | null>> | null;
+  walkInsAllowed?: boolean | null;
+  averageRating?: number | null;
+  totalReviews?: number | null;
+  displayOrder?: number | null;
+  awaitingConnection?: boolean | null;
+  activitiesAwaitingConnection?: boolean | null;
+  inBundle?: boolean | null;
+  surchargePrice?: number | null;
+  resolvedSurchargePrice?: number | null;
+  topupPrice?: number | null;
+  daypassPrice?: number | null;
+};
+
+type VenuePage = {
+  data: ApiVenue[];
+  // pagination and facets are present but unused by the shelves today
+};
+
+// ─── Adapters ─────────────────────────────────────────────────────────────────
+
+function adaptDay(d: DayHours | ApiDayHours | null | undefined): OpeningHoursDay | undefined {
   if (!d) return undefined;
   return {
     open: d.open ?? undefined,
@@ -13,173 +70,164 @@ function adaptDay(d: DayHours | null | undefined): OpeningHoursDay | undefined {
   };
 }
 
-function adaptOpeningHours(dbHours: DbOpeningHours | null | undefined): OpeningHours {
-  if (!dbHours) return {};
+function adaptOpeningHours(
+  hours: DbOpeningHours | ApiVenue['openingHours'] | null | undefined,
+): OpeningHours {
+  if (!hours) return {};
   return {
-    monday: adaptDay(dbHours.monday),
-    tuesday: adaptDay(dbHours.tuesday),
-    wednesday: adaptDay(dbHours.wednesday),
-    thursday: adaptDay(dbHours.thursday),
-    friday: adaptDay(dbHours.friday),
-    saturday: adaptDay(dbHours.saturday),
-    sunday: adaptDay(dbHours.sunday),
+    monday: adaptDay(hours.monday),
+    tuesday: adaptDay(hours.tuesday),
+    wednesday: adaptDay(hours.wednesday),
+    thursday: adaptDay(hours.thursday),
+    friday: adaptDay(hours.friday),
+    saturday: adaptDay(hours.saturday),
+    sunday: adaptDay(hours.sunday),
   };
 }
 
+export function adaptApiVenue(api: ApiVenue): Venue {
+  const inBundle = api.inBundle ?? false;
+  return {
+    id: api.id,
+    slug: api.slug,
+    name: api.name,
+    description: api.description ?? '',
+    address: api.address ?? '',
+    city: api.city ?? '',
+    latitude: api.coordinates?.latitude ?? 0,
+    longitude: api.coordinates?.longitude ?? 0,
+    imageUrl: api.imageUrl ?? `https://picsum.photos/seed/${api.id}/800/520`,
+    // Premium (out-of-bundle) venues fill the old 'luxury' slot so the
+    // existing filters keep working.
+    classification: inBundle ? 'basic' : 'luxury',
+    category: api.categories ?? [],
+    primaryCategory: api.category ?? undefined,
+    // Credits are gone backend-side; kept as a placeholder until the
+    // booking flow migrates to the API. Venue UI shows ISK price labels.
+    creditCost: 1,
+    walkInsAllowed: api.walkInsAllowed ?? false,
+    walkInCreditCost: 1,
+    amenities: api.amenities ?? [],
+    openingHours: adaptOpeningHours(api.openingHours),
+    phone: api.phone ?? '',
+    averageRating: api.averageRating ?? 0,
+    totalReviews: api.totalReviews ?? 0,
+    activities: [],   // loaded separately via fetchActivities
+    reviews: [],      // loaded separately via fetchVenueReviews
+    specialInstructions: undefined,
+    inBundle,
+    surchargePrice: api.surchargePrice ?? undefined,
+    resolvedSurchargePrice: api.resolvedSurchargePrice ?? undefined,
+    topupPrice: api.topupPrice ?? undefined,
+    daypassPrice: api.daypassPrice ?? undefined,
+  };
+}
+
+// DB-row adapter — still used by the walk-in check-in flow, which looks
+// venues up by QR-code id directly in Supabase.
 export function adaptVenue(db: DbVenue): Venue {
+  const inBundle = db.in_bundle ?? true;
   return {
     id: db.id,
+    slug: db.slug ?? undefined,
     name: db.name,
     description: db.description ?? '',
     address: db.address ?? '',
     city: db.city ?? '',
     latitude: db.latitude ?? 0,
     longitude: db.longitude ?? 0,
-    imageUrl: db.image_url ?? `https://picsum.photos/seed/${db.id}/800/520`,
-    classification: (db.classification ?? 'basic') as 'basic' | 'luxury',
-    category: db.category ?? [],
-    creditCost: db.walk_in_credit_cost ?? 1,
+    imageUrl: venueImageUrl(db) ?? `https://picsum.photos/seed/${db.id}/800/520`,
+    classification: inBundle ? 'basic' : 'luxury',
+    category: db.categories ?? [],
+    primaryCategory: db.category ?? undefined,
+    creditCost: 1,
     walkInsAllowed: db.walk_ins_allowed ?? false,
-    walkInCreditCost: db.walk_in_credit_cost ?? 1,
+    walkInCreditCost: 1,
     amenities: db.amenities ?? [],
     openingHours: adaptOpeningHours(db.opening_hours),
     phone: db.phone ?? '',
     averageRating: db.average_rating ?? 0,
     totalReviews: db.total_reviews ?? 0,
-    activities: [],   // loaded separately via fetchActivities
-    reviews: [],      // loaded separately via fetchVenueReviews
-    specialInstructions: db.special_instructions ?? undefined,
+    activities: [],
+    reviews: [],
+    specialInstructions: undefined,
+    inBundle,
+    surchargePrice: db.surcharge_price ?? undefined,
+    resolvedSurchargePrice: db.member_surcharge_price ?? undefined,
+    topupPrice: db.topup_price ?? undefined,
+    daypassPrice: db.daypass_price ?? undefined,
   };
+}
+
+function venueImageUrl(db: DbVenue): string | undefined {
+  const media = (db.venue_media ?? [])
+    .filter((m) => m.active !== false && m.storage_path)
+    .sort((a, b) => (a.display_order ?? 0) - (b.display_order ?? 0));
+  return storageUrl(media[0]?.storage_path) ?? storageUrl(db.image_path);
 }
 
 export function adaptActivity(db: DbActivity): Activity {
   return {
     id: db.id,
     name: db.name,
-    imageUrl: db.image_url ?? `https://picsum.photos/seed/${db.id}/200/200`,
-    creditCost: db.credit_cost ?? 1,
+    imageUrl:
+      db.image_url ??
+      storageUrl(db.image_storage_path) ??
+      `https://picsum.photos/seed/${db.id}/200/200`,
+    creditCost: 1, // see adaptApiVenue — credit model moved behind the API
     durationMinutes: db.duration_minutes ?? 60,
-    classification: (db.classification ?? 'basic') as 'basic' | 'luxury',
+    classification: 'basic',
   };
 }
 
 // ─── Service functions ────────────────────────────────────────────────────────
 
+// The API caps pages at 100; LifePass has ~40 venues, so one page is the
+// whole catalogue (same assumption as the iOS shelves).
+const VENUE_PAGE_LIMIT = 100;
+
 export async function fetchVenues(opts?: {
   search?: string;
   city?: string;
 }): Promise<Venue[]> {
-  let query = supabase
-    .from('venues')
-    .select('*')
-    .eq('is_active', true);
-
-  if (opts?.search) {
-    const escaped = opts.search.replace(/%/g, '\\%').replace(/_/g, '\\_');
-    query = query.ilike('name', `%${escaped}%`);
-  }
-
-  if (opts?.city) {
-    query = query.eq('city', opts.city);
-  }
-
-  const { data, error } = await query.order('display_order', { ascending: true });
-  if (error) throw error;
-  return (data as DbVenue[]).map(adaptVenue);
+  const page = await apiGet<VenuePage>('/venues', {
+    limit: VENUE_PAGE_LIMIT,
+    q: opts?.search,
+    city: opts?.city,
+  });
+  return page.data.map(adaptApiVenue);
 }
 
-// ── Coach Q&A → real DB venues ────────────────────────────────────────────────
-
-// Maps Q&A category key → DB category tags (any overlap = match)
-const CATEGORY_TAGS: Record<string, string[]> = {
-  gym:       ['Fitness', 'Gym'],
-  lagoon:    ['Lagoon', 'Wellness'],
-  yoga:      ['Yoga', 'Fitness', 'Pilates'],
-  swimming:  ['Swimming', 'Pool'],
-  spa:       ['Wellness', 'Spa', 'Sauna'],
-};
-
-// Maps region chip value → DB city names (used with Supabase .in())
-const REGION_CITIES: Record<string, string[]> = {
-  south: ['Reykjavík', 'Kópavogur', 'Hafnarfjörður', 'Garðabær', 'Mosfellsbær',
-          'Keflavík', 'Selfoss', 'Hveragerði', 'Vík', 'Grindavík'],
-  north: ['Akureyri', 'Húsavík', 'Sauðárkrókur', 'Dalvík', 'Siglufjörður'],
-  east:  ['Egilsstaðir', 'Eskifjörður', 'Neskaupstaður', 'Seyðisfjörður'],
-  west:  ['Borgarnes', 'Akranes', 'Ísafjörður', 'Stykkishólmur', 'Snæfellsbær'],
-};
-
-// Haversine great-circle distance in km
-function haversineKm(
-  lat1: number, lon1: number,
-  lat2: number, lon2: number,
-): number {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * (Math.PI / 180)) *
-    Math.cos(lat2 * (Math.PI / 180)) *
-    Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-export async function fetchVenuesByCoachQuery(
-  category: string,
-  locationAnswer: string,
-  userCoords?: { latitude: number; longitude: number },
+/**
+ * `GET /venues` filtered to one API category — used by the Coach venue
+ * wizard's result cards (mirrors iOS VenueService.fetchVenuesFromAPI).
+ * The API matches the category case-insensitively against each venue's
+ * `categories` array.
+ */
+export async function fetchVenuesFromAPI(
+  category: string | null,
+  limit = 20,
 ): Promise<Venue[]> {
-  const tags = CATEGORY_TAGS[category] ?? [];
-  const isCloseby = locationAnswer === '__closeby__';
+  const page = await apiGet<VenuePage>('/venues', {
+    limit,
+    category: category ?? undefined,
+  });
+  return page.data.map(adaptApiVenue);
+}
 
-  let query = supabase
-    .from('venues')
-    .select('*')
-    .eq('is_active', true);
-
-  // Supabase `.overlaps` = array has at least one element in common
-  if (tags.length > 0) {
-    query = query.overlaps('category', tags);
-  }
-
-  if (!isCloseby) {
-    const cities = REGION_CITIES[locationAnswer];
-    if (cities && cities.length > 0) {
-      query = query.in('city', cities);
-    }
-    // 'anywhere' or unrecognised value → no city filter
-  }
-
-  // Fetch more when we'll sort by proximity so we have enough to trim from
-  const fetchLimit = isCloseby ? 20 : 4;
-  const { data, error } = await query
-    .order('display_order', { ascending: true })
-    .limit(fetchLimit);
-
-  if (error) throw error;
-  const venues = (data as DbVenue[]).map(adaptVenue);
-
-  // When "Close by" selected: sort by Haversine distance, return nearest 4
-  if (isCloseby && userCoords) {
-    venues.sort((a, b) => {
-      const da = haversineKm(userCoords.latitude, userCoords.longitude, a.latitude, a.longitude);
-      const db = haversineKm(userCoords.latitude, userCoords.longitude, b.latitude, b.longitude);
-      return da - db;
-    });
-    return venues.slice(0, 4);
-  }
-
-  return venues;
+export async function fetchVenueBySlug(slug: string): Promise<Venue> {
+  const venue = await apiGet<ApiVenue>(`/venues/by-slug/${encodeURIComponent(slug)}`);
+  return adaptApiVenue(venue);
 }
 
 export async function fetchVenueById(id: string): Promise<Venue> {
-  const { data, error } = await supabase
-    .from('venues')
-    .select('*')
-    .eq('id', id)
-    .single();
-  if (error) throw error;
-  return adaptVenue(data as DbVenue);
+  // The API has no get-by-id (detail is keyed by slug), but one page holds
+  // the whole catalogue — find the venue there so callers keep their id-based
+  // navigation.
+  const page = await apiGet<VenuePage>('/venues', { limit: VENUE_PAGE_LIMIT });
+  const match = page.data.find((v) => v.id === id);
+  if (!match) throw new Error('Venue not found');
+  return adaptApiVenue(match);
 }
 
 export async function fetchActivities(venueId: string): Promise<Activity[]> {
@@ -187,7 +235,7 @@ export async function fetchActivities(venueId: string): Promise<Activity[]> {
     .from('activities')
     .select('*')
     .eq('venue_id', venueId)
-    .eq('is_active', true)
+    .eq('active', true)
     .order('display_order', { ascending: true });
   if (error) throw error;
   return (data as DbActivity[]).map(adaptActivity);

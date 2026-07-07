@@ -15,6 +15,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors } from '../../theme';
+import Wordmark from '../../components/Wordmark';
 import type { RecentChat } from '../../data/mockCoach';
 
 const DRAWER_WIDTH = Math.min(Dimensions.get('window').width * 0.78, 300);
@@ -23,10 +24,21 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onNewChat: () => void;
+  /** Opens the saved-venues list (Bookings → Saved). */
+  onSaved: () => void;
+  /** Restores a persisted conversation from RECENTS. */
+  onSelectRecent: (chatId: string) => void;
   recentChats: RecentChat[];
 };
 
-export default function ChatDrawer({ visible, onClose, onNewChat, recentChats }: Props) {
+export default function ChatDrawer({
+  visible,
+  onClose,
+  onNewChat,
+  onSaved,
+  onSelectRecent,
+  recentChats,
+}: Props) {
   const insets = useSafeAreaInsets();
   const [mounted, setMounted] = useState(false);
   const slideX = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
@@ -95,8 +107,7 @@ export default function ChatDrawer({ visible, onClose, onNewChat, recentChats }:
       >
         {/* LifePass logo */}
         <View style={styles.logoRow}>
-          <Text style={styles.logoLife}>Life</Text>
-          <Text style={styles.logoPass}>Pass</Text>
+          <Wordmark height={20} />
         </View>
 
         {/* Primary nav */}
@@ -113,12 +124,15 @@ export default function ChatDrawer({ visible, onClose, onNewChat, recentChats }:
             <Text style={styles.navText}>Add chat</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-            <Ionicons name="chatbubble-outline" size={16} color={colors.paper} />
-            <Text style={styles.navText}>Chats</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+          {/* (No "Chats" item — it was a no-op; RECENTS below covers it. Same as iOS.) */}
+          <TouchableOpacity
+            style={styles.navItem}
+            activeOpacity={0.7}
+            onPress={() => {
+              onClose();
+              onSaved();
+            }}
+          >
             <Ionicons name="heart-outline" size={16} color={colors.paper} />
             <Text style={styles.navText}>Saved</Text>
           </TouchableOpacity>
@@ -127,18 +141,25 @@ export default function ChatDrawer({ visible, onClose, onNewChat, recentChats }:
         {/* Recents */}
         <Text style={styles.sectionLabel}>Recents</Text>
         <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-          {recentChats.map((chat) => (
-            <TouchableOpacity
-              key={chat.id}
-              style={styles.recentItem}
-              activeOpacity={0.6}
-              onPress={onClose}
-            >
-              <Text style={styles.recentText} numberOfLines={1}>
-                {chat.title}
-              </Text>
-            </TouchableOpacity>
-          ))}
+          {recentChats.length === 0 ? (
+            <Text style={styles.noRecents}>No recent chats yet.</Text>
+          ) : (
+            recentChats.map((chat) => (
+              <TouchableOpacity
+                key={chat.id}
+                style={styles.recentItem}
+                activeOpacity={0.6}
+                onPress={() => {
+                  onSelectRecent(chat.id);
+                  onClose();
+                }}
+              >
+                <Text style={styles.recentText} numberOfLines={1}>
+                  {chat.title}
+                </Text>
+              </TouchableOpacity>
+            ))
+          )}
         </ScrollView>
 
         {/* New chat button at bottom */}
@@ -218,6 +239,11 @@ const styles = StyleSheet.create({
   },
   recentItem: {
     paddingVertical: 10,
+  },
+  noRecents: {
+    fontSize: 14,
+    color: colors.paper3,
+    paddingVertical: 8,
   },
   recentText: {
     fontSize: 15,

@@ -15,8 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
 import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
-import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
+import { isPremium, isBoutique, priceLabel } from '../../types/venue';
 import type {
   Venue,
   Activity,
@@ -158,11 +158,13 @@ function HeroBlock({
       <View style={heroStyles.titleBlock}>
         <Kicker
           text={
-            venue.classification === 'luxury'
-              ? `Luxury · ${venue.creditCost} credits`
-              : `Classic · ${venue.creditCost} credit${venue.creditCost === 1 ? '' : 's'}`
+            isPremium(venue)
+              ? `Premium · ${priceLabel(venue)}`
+              : isBoutique(venue)
+                ? priceLabel(venue)
+                : 'In your plan'
           }
-          color={venue.classification === 'luxury' ? colors.skyBlue : colors.paper2}
+          color={isPremium(venue) ? colors.skyBlue : colors.paper2}
         />
         <Text style={heroStyles.name}>{venue.name}</Text>
         <Text style={heroStyles.city}>{venue.city}</Text>
@@ -265,7 +267,6 @@ function ActivityRow({ activity, onPress }: { activity: Activity; onPress: () =>
         </View>
       </View>
       <View style={activityStyles.trailing}>
-        <CreditPill credits={activity.creditCost} compact />
         <Ionicons name="chevron-forward" size={11} color={colors.paper3} />
       </View>
     </TouchableOpacity>
@@ -465,7 +466,7 @@ function FloatingAction({
             </Text>
           </View>
           <TouchableOpacity style={floatStyles.bookButton} activeOpacity={0.85} onPress={onBook}>
-            <Text style={floatStyles.bookButtonText}>Book · {first.creditCost} cr</Text>
+            <Text style={floatStyles.bookButtonText}>Book →</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -67,7 +67,7 @@ export async function walkInCheckIn(venueId: string): Promise<WalkInResult> {
     .from('venues')
     .select('*')
     .eq('id', venueId)
-    .eq('is_active', true)
+    .eq('active', true)
     .limit(1);
   if (venueError) throw venueError;
   const dbVenue = (venueRows ?? [])[0] as DbVenue | undefined;
@@ -94,7 +94,7 @@ export async function walkInCheckIn(venueId: string): Promise<WalkInResult> {
     .from('activities')
     .select('*')
     .eq('venue_id', venueId)
-    .eq('is_active', true)
+    .eq('active', true)
     .order('display_order', { ascending: true })
     .limit(1);
   if (activityError) throw activityError;
@@ -106,8 +106,11 @@ export async function walkInCheckIn(venueId: string): Promise<WalkInResult> {
   let reason: string;
 
   if (firstActivity) {
-    creditCost = firstActivity.credit_cost ?? 0;
-    isLuxury = (firstActivity.classification ?? '').toLowerCase() === 'luxury';
+    // Prod schema dropped credit_cost/classification — the credit model now
+    // lives behind the /api/v1/* API. Check-in must migrate there; until
+    // then charge the venue-level placeholder cost.
+    creditCost = venue.walkInCreditCost;
+    isLuxury = venue.classification === 'luxury';
     activityId = firstActivity.id;
     reason = `Walk-in: ${firstActivity.name}`;
   } else {

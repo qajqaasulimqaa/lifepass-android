@@ -1,29 +1,32 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
-import CreditPill from './CreditPill';
 import Kicker from './Kicker';
-import { useSubscription } from '../supabase/hooks/useSubscription';
+import Wordmark from './Wordmark';
 
 type Props = {
   title: string;
   subtitle?: string;
+  /**
+   * Trailing button: a person icon everywhere (one-tap path into Account),
+   * or a settings gear on the Library/profile screen — mirrors the iOS
+   * BrandedTopBar. (v1 removed the credit balance, so the old credit pill
+   * is gone.)
+   */
+  trailing?: 'person' | 'settings';
 };
 
-export default function BrandedTopBar({ title, subtitle }: Props) {
+export default function BrandedTopBar({ title, subtitle, trailing = 'person' }: Props) {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
-  const { credits } = useSubscription();
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.row}>
         <View style={styles.wordmarkContainer}>
-          <Text>
-            <Text style={styles.wordmarkLife}>Life</Text>
-            <Text style={styles.wordmarkPass}>Pass</Text>
-          </Text>
+          <Wordmark height={18} />
         </View>
 
         <View style={styles.center}>
@@ -32,8 +35,17 @@ export default function BrandedTopBar({ title, subtitle }: Props) {
         </View>
 
         <View style={styles.right}>
-          <TouchableOpacity onPress={() => navigation.navigate('Account')} activeOpacity={0.7}>
-            <CreditPill credits={credits} />
+          <TouchableOpacity
+            style={styles.trailingBtn}
+            onPress={() => navigation.navigate('Account')}
+            activeOpacity={0.7}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons
+              name={trailing === 'settings' ? 'settings-outline' : 'person-circle-outline'}
+              size={trailing === 'settings' ? 18 : 22}
+              color={colors.paper2}
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -55,9 +67,17 @@ const styles = StyleSheet.create({
     paddingBottom: 16,
     gap: 12,
   },
-  wordmarkContainer: { width: 80, alignItems: 'flex-start' },
-  wordmarkLife: { fontSize: 19, color: colors.paper, fontStyle: 'italic' },
-  wordmarkPass: { fontSize: 19, color: colors.paper, fontWeight: '700' },
+  wordmarkContainer: { width: 80, alignItems: 'flex-start', paddingTop: 3 },
   center: { flex: 1, alignItems: 'center', gap: 3, paddingTop: 2 },
   right: { width: 80, alignItems: 'flex-end' },
+  trailingBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.ink2,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });

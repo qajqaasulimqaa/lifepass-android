@@ -13,6 +13,7 @@ import {
   Platform,
   ImageBackground,
   Keyboard,
+  Dimensions,
 } from 'react-native';
 // MIC UNWIRED — restore before launch
 // import {
@@ -25,12 +26,19 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, type RouteProp } from '@react-navigation/native';
 import { colors } from '../../theme';
 import WaveIcon from '../../components/WaveIcon';
+import Wordmark from '../../components/Wordmark';
 import {
   mockCoachMessages,
-  recentChats,
   selectChips,
 } from '../../data/mockCoach';
 import { deriveActivityTags } from '../../coach/deriveTags';
+import {
+  loadSessions,
+  buildSession,
+  upsertSession,
+  messagesFromSession,
+  type ChatSession,
+} from '../../coach/chatSessions';
 import { sendCoachMessage } from '../../supabase/services/coach';
 import { useBookings } from '../../supabase/hooks/useBookings';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
@@ -39,10 +47,16 @@ import type { CoachStackParamList } from '../../navigation/types';
 import {
   detectVenueCategory,
   VENUE_QUESTIONS,
+  coachLocationFilter,
+  coachCategoryOverride,
+  icelandRegion,
+  type CoachLocationFilter,
 } from '../../data/coachQuestions';
 import { coachCategories } from '../../data/coachCategories';
 import { deriveCoachHeading } from '../../utils/activityHeading';
-import { fetchVenuesByCoachQuery } from '../../supabase/services/venues';
+import { fetchVenuesFromAPI } from '../../supabase/services/venues';
+import type { Venue } from '../../types/venue';
+import type { SuggestionChip } from '../../data/mockCoach';
 import ChatDrawer from './ChatDrawer';
 import SuggestionChips from './SuggestionChips';
 import VenueCarouselMessage from './VenueCarouselMessage';
@@ -68,11 +82,19 @@ export default function CoachScreen() {
   );
 
   const [messages, setMessages] = useState<ChatMessage[]>(mockCoachMessages);
+  // Persisted RECENTS (drawer) — up to 4 past conversations.
+  const [savedSessions, setSavedSessions] = useState<ChatSession[]>([]);
+  // Id of the on-screen conversation once saved/restored, so re-persisting
+  // upserts the SAME recents entry instead of minting a duplicate.
+  const currentSessionIdRef = useRef<string | null>(null);
+  // Bumped by resetChat/restoreSession — in-flight AI/venue replies capture
+  // it and drop their append when the chat changed underneath them.
+  const chatGenRef = useRef(0);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [userCoords, setUserCoords] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isListening, setIsListening] = useState(false);
   const scrollRef = useRef<ScrollView | null>(null);
   const categoryScrollRef = useRef<ScrollView | null>(null);
@@ -95,6 +117,11 @@ export default function CoachScreen() {
   } | null>(null);
 
   // Request location permission on mount and cache coordinates for "Close by" chip
+  // Load the persisted recents once on mount.
+  useEffect(() => {
+    loadSessions().then(setSavedSessions);
+  }, []);
+
   useEffect(() => {
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -113,8 +140,17 @@ export default function CoachScreen() {
   useEffect(() => {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-    const show = Keyboard.addListener(showEvent, () => setKeyboardVisible(true));
-    const hide = Keyboard.addListener(hideEvent, () => setKeyboardVisible(false));
+    const show = Keyboard.addListener(showEvent, (e) => {
+      // Android edge-to-edge under-reports endCoordinates.height (it can miss
+      // the nav-bar strip the window draws behind), leaving the input partially
+      // hidden. The keyboard's top edge (screenY) vs the window height gives
+      // the true coverage — take whichever is larger.
+      const { height = 0, screenY } = e.endCoordinates ?? {};
+      const winH = Dimensions.get('window').height;
+      const coverage = screenY != null ? Math.max(height, winH - screenY) : height;
+      setKeyboardHeight(coverage);
+    });
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
     return () => { show.remove(); hide.remove(); };
   }, []);
 
@@ -130,11 +166,13 @@ export default function CoachScreen() {
 
   // ── Core AI call (bypasses Q&A detection) ────────────────────────────────
   async function callAI(outgoing: ChatMessage[]) {
+    const gen = chatGenRef.current; // drop the reply if the chat changes
     setIsTyping(true);
     try {
       // Strip Q&A messages from history so the AI only sees real conversation
       const clean = outgoing.filter((m) => !m.questionOptions);
       const reply = await sendCoachMessage(clean);
+      if (gen !== chatGenRef.current) return; // chat was reset/restored mid-flight
       setMessages((m) => [
         ...m,
         {
@@ -148,6 +186,7 @@ export default function CoachScreen() {
       ]);
       setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
     } catch (e) {
+      if (gen !== chatGenRef.current) return; // chat was reset/restored mid-flight
       const err = e instanceof Error ? e.message : 'Coach is unavailable right now.';
       setMessages((m) => [
         ...m,
@@ -179,6 +218,221 @@ export default function CoachScreen() {
     setQaFlow({ category, step: 0, answers: [] });
     setInput('');
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+  }
+
+  // ── Venue querying (mirrors iOS CoachViewModel.queryVenues) ───────────────
+
+  // Maps a Coach venue-search key (from detectVenueCategory) to a single
+  // DB category the /venues API understands.
+  function apiCategory(key: string): string {
+    switch (key) {
+      case 'gym':      return 'Gym';
+      case 'lagoon':   return 'Lagoon';
+      case 'yoga':     return 'Yoga';
+      case 'swimming': return 'Pool';
+      case 'spa':      return 'Spa';
+      case 'golf':     return 'Golf';
+      default:         return key;
+    }
+  }
+
+  // User-facing word for a broad search key, for chat copy — "swimming"
+  // reads better to a member than the DB's "Pool".
+  function displayCategoryName(key: string): string {
+    return key; // the internal keys are already readable English words
+  }
+
+  function haversineMeters(
+    lat1: number, lon1: number,
+    lat2: number, lon2: number,
+  ): number {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  // Same threshold iOS uses when routed ETAs are unavailable — RN has no
+  // MapKit routing, so the straight-line fallback IS the filter here.
+  const NEARBY_RADIUS_METERS = 15_000;
+  const REYKJAVIK_CENTRE = { latitude: 64.1466, longitude: -21.9426 };
+
+  // The "Where in Iceland?" chip is honoured client-side (the API has no
+  // geo filter): 15-min drive → distance from the user's position
+  // (Reykjavík fallback), nearest first; a region → venues whose
+  // coordinates fall in that region; none → list untouched.
+  function applyLocationFilter(
+    venues: Venue[],
+    filter: CoachLocationFilter,
+  ): { venues: Venue[]; note?: string } {
+    switch (filter.kind) {
+      case 'none':
+        return { venues };
+
+      case 'region':
+        return {
+          venues: venues.filter((v) => {
+            if (!v.latitude || !v.longitude) return false;
+            return icelandRegion(v.latitude, v.longitude) === filter.region;
+          }),
+        };
+
+      case 'nearbyDrive': {
+        const hasFix = userCoords != null;
+        const origin = userCoords ?? REYKJAVIK_CENTRE;
+
+        const ranked = venues
+          .filter((v) => v.latitude && v.longitude)
+          .map((v) => ({
+            venue: v,
+            meters: haversineMeters(origin.latitude, origin.longitude, v.latitude, v.longitude),
+          }))
+          .sort((a, b) => a.meters - b.meters);
+        const within = ranked.filter((r) => r.meters <= NEARBY_RADIUS_METERS).map((r) => r.venue);
+        const all = ranked.map((r) => r.venue);
+
+        if (!hasFix) {
+          // No real location — measuring from Reykjavík centre. Prefer the
+          // within-radius set (most venues are in the capital), else the
+          // closest, and be honest about the origin.
+          const pool = within.length > 0 ? within : all;
+          return {
+            venues: pool,
+            note: pool.length > 0
+              ? "I don't have your location yet, so these are around Reykjavík — turn on location for spots near you:"
+              : undefined,
+          };
+        }
+        if (within.length === 0) {
+          // Nothing within ~15 min — surface the closest options instead of
+          // an empty result, and say so.
+          return {
+            venues: all,
+            note: all.length > 0
+              ? 'Nothing within a 15-minute drive — here are the closest:'
+              : undefined,
+          };
+        }
+        return { venues: within };
+      }
+    }
+  }
+
+  function venueCardOf(v: Venue, category: string): VenueCard {
+    return {
+      id: v.id,
+      name: v.name,
+      location: [v.city, v.address].filter(Boolean).join(' · '),
+      description: v.description || '',
+      imageUrl: v.imageUrl,
+      creditCost: v.creditCost,
+      category: v.category?.[0] ?? category,
+      // Pricing passthrough for the card's "Included"/premium pill
+      inBundle: v.inBundle,
+      surchargePrice: v.surchargePrice,
+      resolvedSurchargePrice: v.resolvedSurchargePrice,
+      topupPrice: v.topupPrice,
+      daypassPrice: v.daypassPrice,
+      primaryCategory: v.primaryCategory,
+    };
+  }
+
+  async function queryVenues(category: string, answers: string[]) {
+    const gen = chatGenRef.current; // drop the reply if the chat changes
+    setIsTyping(true);
+    try {
+      // A specific training-type chip (e.g. "MMA & Combat") can target a
+      // narrower DB category than the broad one; use it so the matching
+      // venue surfaces (e.g. Mjölnir for MMA). Fall back to the broad
+      // category if the narrower query comes back empty.
+      const broadCategory = apiCategory(category);
+      const override = coachCategoryOverride(answers);
+      // Fetch a generous set, then filter by the member's location chip
+      // client-side. 100 gives the distance/region filters enough to choose
+      // from before we trim to 10 cards.
+      let all = await fetchVenuesFromAPI(override ?? broadCategory, 100);
+      let usedOverride = override != null;
+      if (all.length === 0 && override != null) {
+        all = await fetchVenuesFromAPI(broadCategory, 100);
+        usedOverride = false;
+      }
+      const result = applyLocationFilter(all, coachLocationFilter(answers));
+      if (gen !== chatGenRef.current) return; // chat was reset/restored mid-flight
+      const shown = result.venues.slice(0, 10);
+
+      // What the member asked for (e.g. "MMA"), vs. what we're showing —
+      // a broad fallback shows broad results, so don't mislabel them.
+      const wanted = override ?? displayCategoryName(category);
+      const showing = (usedOverride ? override : null) ?? displayCategoryName(category);
+
+      if (shown.length === 0) {
+        setMessages((m) => [...m, {
+          id: nextId(), role: 'assistant',
+          text: `Hmm, I couldn't find any ${wanted} options in that area. Try a wider location?`,
+          createdAt: new Date(),
+        }]);
+      } else {
+        const intro = result.note
+          ?? `Found ${shown.length} ${showing} option${shown.length > 1 ? 's' : ''} for you:`;
+        setMessages((m) => [...m, {
+          id: nextId(), role: 'assistant',
+          text: intro,
+          venueCards: shown.map((v) => venueCardOf(v, category)),
+          createdAt: new Date(),
+        }]);
+      }
+      // Follow-up: invite the member to explore another category. The
+      // category cards start a fresh Q&A flow when tapped.
+      setMessages((m) => [...m, {
+        id: nextId(), role: 'assistant',
+        text: 'Want to explore something else?',
+        categoryPicker: true,
+        createdAt: new Date(),
+      }]);
+      setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+    } catch (e) {
+      if (gen !== chatGenRef.current) return; // chat was reset/restored mid-flight
+      setMessages((m) => [...m, {
+        id: nextId(), role: 'assistant',
+        text: "Sorry — I couldn't load venues right now. Please try again.",
+        createdAt: new Date(),
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
+  }
+
+  // ── Suggestion chips (mirrors iOS showCategoryPicker) ─────────────────────
+
+  // "What's nearby?" / "After work" / "Something new" don't name a venue
+  // type, so rather than presuming one they show the same category strip
+  // used after a completed search, letting the member pick.
+  function showCategoryPicker(chipLabel: string) {
+    if (isTyping) return;
+    setQaFlow(null);
+    setMessages((m) => [
+      ...m,
+      { id: nextId(), role: 'user', text: chipLabel, createdAt: new Date() },
+      {
+        id: nextId(), role: 'assistant',
+        text: 'What would you like to find nearby?',
+        categoryPicker: true,
+        createdAt: new Date(),
+      },
+    ]);
+  }
+
+  function handleChipSelect(chip: SuggestionChip) {
+    if (chip.showsCategoryStrip) {
+      showCategoryPicker(chip.text);
+    } else {
+      send(chip.prompt);
+    }
   }
 
   // ── Handle chip selection inside a Q&A bubble ─────────────────────────────
@@ -214,69 +468,12 @@ export default function CoachScreen() {
       setMessages((m) => [...m, userMsg, questionMsg]);
       setQaFlow({ ...qaFlow, step: nextStep, answers: newAnswers });
     } else {
-      // All 3 questions answered → query real DB venues
-      const { category, answers: prevAnswers } = qaFlow;
-      const allAnswers = [...prevAnswers, value];
-      const locationAnswer = allAnswers[1] ?? ''; // Q2 is always location
-
+      // All questions answered → query real venues, honouring the location
+      // chip (and any other answers) the member picked.
+      const { category } = qaFlow;
       setMessages((m) => [...m, userMsg]);
       setQaFlow(null);
-      setIsTyping(true);
-
-      try {
-        const venues = await fetchVenuesByCoachQuery(category, locationAnswer, userCoords ?? undefined);
-        const venueCards = venues.map((v) => ({
-          id: v.id,
-          name: v.name,
-          location: [v.city, v.address].filter(Boolean).join(' · '),
-          description: v.description || '',
-          imageUrl: v.imageUrl,
-          creditCost: v.creditCost,
-          category: v.category?.[0] ?? category,
-        }));
-
-        const intro = venueCards.length > 0
-          ? `Found ${venueCards.length} ${category} option${venueCards.length > 1 ? 's' : ''} for you:`
-          : `No exact matches found — here are all our ${category} venues:`;
-
-        // If DB returned nothing, fall back to a wider search
-        if (venueCards.length === 0) {
-          const fallback = await fetchVenuesByCoachQuery(category, 'anywhere');
-          const fallbackCards = fallback.map((v) => ({
-            id: v.id,
-            name: v.name,
-            location: [v.city, v.address].filter(Boolean).join(' · '),
-            description: v.description || '',
-            imageUrl: v.imageUrl,
-            creditCost: v.creditCost,
-            category: v.category?.[0] ?? category,
-          }));
-          setMessages((m) => [...m, {
-            id: nextId(), role: 'assistant',
-            text: fallbackCards.length > 0
-              ? `No exact match for your filters — here's what we have for ${category}:`
-              : `We don't have any ${category} venues listed yet. Check back soon!`,
-            venueCards: fallbackCards.length > 0 ? fallbackCards : undefined,
-            createdAt: new Date(),
-          }]);
-        } else {
-          setMessages((m) => [...m, {
-            id: nextId(), role: 'assistant',
-            text: intro,
-            venueCards,
-            createdAt: new Date(),
-          }]);
-        }
-        setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
-      } catch (e) {
-        setMessages((m) => [...m, {
-          id: nextId(), role: 'assistant',
-          text: 'Sorry — I couldn\'t load venues right now. Please try again.',
-          createdAt: new Date(),
-        }]);
-      } finally {
-        setIsTyping(false);
-      }
+      await queryVenues(category, newAnswers);
     }
 
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
@@ -336,8 +533,44 @@ export default function CoachScreen() {
     // no-op until mic is rewired
   }
 
+  /** Snapshot the live conversation into RECENTS (no-op before the first
+   *  user message). Mirrors iOS persistCurrentSession(). */
+  async function persistCurrentSession() {
+    const session = buildSession(messages, currentSessionIdRef.current);
+    if (!session) return;
+    currentSessionIdRef.current = session.id;
+    setSavedSessions(await upsertSession(savedSessions, session));
+  }
+
   function resetChat() {
+    persistCurrentSession(); // save the outgoing chat before wiping it
+    chatGenRef.current += 1; // drop any in-flight reply
+    currentSessionIdRef.current = null; // the new chat is a brand-new session
     setMessages(mockCoachMessages);
+    setInput('');
+    setIsTyping(false);
+    setQaFlow(null);
+  }
+
+  /** Reload a saved session (drawer RECENTS tap). Mirrors iOS restoreSession(). */
+  function restoreSession(sessionId: string) {
+    // Re-selecting the OPEN session would restore a stale snapshot and
+    // silently drop the newest turns — no-op instead.
+    if (sessionId === currentSessionIdRef.current) return;
+    const session = savedSessions.find((s) => s.id === sessionId);
+    if (!session) return;
+    // Save the active conversation FIRST so opening a recent never
+    // silently discards in-progress work.
+    persistCurrentSession();
+    chatGenRef.current += 1; // drop any in-flight reply
+    currentSessionIdRef.current = session.id;
+    setMessages(messagesFromSession(session));
+    // Restored messages keep their ORIGINAL ids, which can be ≥ this
+    // launch's idCounter — advance it past them so new ids never collide.
+    const restoredIds = session.messages
+      .map((m) => parseInt(m.id, 10))
+      .filter(Number.isFinite);
+    idCounter = Math.max(idCounter, ...restoredIds, idCounter);
     setInput('');
     setIsTyping(false);
     setQaFlow(null);
@@ -389,11 +622,13 @@ export default function CoachScreen() {
   );
 
   return (
-    // KAV is the outermost element so it owns the full-screen height and can
-    // correctly push content above the keyboard on both platforms.
+    // iOS: native 'padding' avoidance smoothly lifts the whole view above the
+    // keyboard, so the inputBar only needs a small bottom margin. Android is
+    // edge-to-edge (app.json) so the window never resizes and KAV can't help —
+    // there we lift the inputBar manually by the measured keyboard height (below).
     <KeyboardAvoidingView
       style={styles.root}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
       <ImageBackground
@@ -401,6 +636,23 @@ export default function CoachScreen() {
         style={styles.bg}
         resizeMode="cover"
       >
+        {/* TEMP DEBUG — remove once keyboard behaviour is confirmed. */}
+        {__DEV__ && (
+          <Text
+            style={{
+              position: 'absolute',
+              top: insets.top + 4,
+              right: 12,
+              zIndex: 9999,
+              color: '#FFD400',
+              fontWeight: '700',
+              fontSize: 16,
+            }}
+          >
+            kb={Math.round(keyboardHeight)} ins={Math.round(insets.bottom)} win=
+            {Math.round(Dimensions.get('window').height)}
+          </Text>
+        )}
         <View style={styles.overlayTop} />
         <View style={styles.overlayBottom} />
 
@@ -415,7 +667,7 @@ export default function CoachScreen() {
             <Ionicons name="menu-outline" size={26} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Text style={styles.screenTitle}>Your Wellness Coach</Text>
+          <Wordmark height={17} />
           <View style={{ width: 42 }} />
         </View>
 
@@ -448,6 +700,13 @@ export default function CoachScreen() {
                     selectedAnswer={m.selectedAnswer}
                     onSelect={(value, label) => handleOptionSelect(m.id, value, label)}
                   />
+                ) : m.categoryPicker ? (
+                  // "Want to explore something else?" — category cards start
+                  // a fresh Q&A flow when tapped (same as iOS).
+                  <View key={m.id}>
+                    <MessageBubble message={m} />
+                    {CategoryStrip}
+                  </View>
                 ) : (
                   <MessageBubble key={m.id} message={m} />
                 )
@@ -462,15 +721,23 @@ export default function CoachScreen() {
               </Pressable>
               {/* Flex spacer pushes chips as far down as possible */}
               <View style={{ flex: 1 }} />
-              <SuggestionChips chips={chips} onSelect={send} />
+              <SuggestionChips chips={chips} onSelect={handleChipSelect} />
             </>
           )}
 
-          {/* Category strip — only in empty state, hidden while keyboard is open */}
-          {!hasStartedChat && !keyboardVisible && CategoryStrip}
-
           {/* ── Input bar ── */}
-          <View style={[styles.inputBar, { paddingBottom: keyboardVisible ? insets.bottom + 8 : insets.bottom + 104 }]}>
+          {/* Keyboard open → sit the input just above it. iOS: KAV already lifted
+              the view, so just an 8px margin. Android: anchor the bar absolutely
+              at the keyboard's top edge — immune to flex/padding interactions.
+              Closed → in-flow, clearing the floating tab bar (row 76 + inset). */}
+          <View
+            style={[
+              styles.inputBar,
+              keyboardHeight > 0 && Platform.OS === 'android'
+                ? { position: 'absolute', left: 0, right: 0, bottom: keyboardHeight + 8 }
+                : { paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 84 },
+            ]}
+          >
             <TextInput
               value={input}
               onChangeText={setInput}
@@ -514,7 +781,14 @@ export default function CoachScreen() {
         visible={drawerOpen}
         onClose={() => setDrawerOpen(false)}
         onNewChat={resetChat}
-        recentChats={recentChats}
+        onSaved={() =>
+          navigation.navigate('Bookings', {
+            screen: 'BookingsMain',
+            params: { initialTab: 'saved' },
+          })
+        }
+        recentChats={savedSessions.map((s) => ({ id: s.id, title: s.title }))}
+        onSelectRecent={restoreSession}
       />
     </KeyboardAvoidingView>
   );

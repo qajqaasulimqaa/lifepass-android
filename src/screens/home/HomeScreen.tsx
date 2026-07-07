@@ -1,8 +1,10 @@
+import { useState, useCallback } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Image,
+  TextInput,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -10,18 +12,20 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
+import { useBookings } from '../../supabase/hooks/useBookings';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { useWeather } from '../../hooks/useWeather';
 import { weatherRecommendation } from '../../services/weather';
 import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
+import Wordmark from '../../components/Wordmark';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
 import CuratedVenueRow from '../../components/CuratedVenueRow';
 import { coachCategories, type CoachCategory } from '../../data/coachCategories';
@@ -44,12 +48,32 @@ function getGreeting(): string {
   return 'Good night';
 }
 
+/** Short, human relative-time for a booking: "Today · 18:00",
+ *  "Tomorrow · 09:30" or "Sat 7 Jun · 14:00". Mirrors the iOS bookingWhen(). */
+function bookingWhen(date: Date): string {
+  const time = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+  const now = new Date();
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate();
+  const tomorrow = new Date(now);
+  tomorrow.setDate(now.getDate() + 1);
+  if (sameDay(date, now)) return `Today · ${time}`;
+  if (sameDay(date, tomorrow)) return `Tomorrow · ${time}`;
+  const day = date
+    .toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })
+    .replace(',', '');
+  return `${day} · ${time}`;
+}
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
   const { credits } = useSubscription();
   const { venues, loading } = useVenues();
+  const { bookings: upcomingBookings } = useBookings(true);
   const { weather } = useWeather();
 
   const greeting = getGreeting();
@@ -57,9 +81,35 @@ export default function HomeScreen() {
   const firstName = fullName.split(' ')[0] || 'there';
   const initial = firstName.charAt(0).toUpperCase();
 
-  const hero = venues[0];
-  const nearby = venues.slice(1, 4);
-  const curated = venues.slice(4);
+  // Random hero — a fresh venue photo each time Home gains focus, preferring
+  // venues that actually have an image so the hero never renders blank.
+  // Mirrors the iOS pickRandomHero() (re-rolled per appear/refresh, no timer).
+  const [heroVenueId, setHeroVenueId] = useState<string | null>(null);
+  useFocusEffect(
+    useCallback(() => {
+      const withImage = venues.filter((v) => !!v.imageUrl);
+      const pool = withImage.length > 0 ? withImage : venues;
+      if (pool.length > 0) {
+        setHeroVenueId(pool[Math.floor(Math.random() * pool.length)].id);
+      }
+    }, [venues]),
+  );
+
+  const hero = venues.find((v) => v.id === heroVenueId) ?? venues[0];
+  // "Close by" — exclude the hero so it never appears twice on screen.
+  const nearby = venues.filter((v) => v.id !== hero?.id).slice(0, 3);
+
+  // "Picked for you" — the venues not already in hero/nearby, ranked by review
+  // volume (a global popularity signal), top 4. Mirrors the iOS `popular` shelf.
+  const nearbyIds = new Set(nearby.map((v) => v.id));
+  const curated = venues
+    .filter((v) => v.id !== hero?.id && !nearbyIds.has(v.id))
+    .sort((a, b) => (b.totalReviews ?? 0) - (a.totalReviews ?? 0))
+    .slice(0, 4);
+
+  // Soonest confirmed booking drives the "UPCOMING" card; null shows the
+  // "No upcoming bookings" empty state with an Explore CTA (matches iOS).
+  const upcomingBooking = upcomingBookings[0];
 
   function openVenue(venueId: string) {
     navigation.navigate('VenueDetail', { venueId });
@@ -67,6 +117,14 @@ export default function HomeScreen() {
 
   function openAccount() {
     navigation.navigate('Account');
+  }
+
+  function openBookings() {
+    navigation.navigate('Bookings');
+  }
+
+  function openExplore() {
+    navigation.navigate('Explore');
   }
 
   function openCoach(prefilledMessage?: string) {
@@ -104,10 +162,7 @@ export default function HomeScreen() {
         <View style={[styles.heroInner, { paddingTop: insets.top + 12 }]}>
           {/* Top bar */}
           <View style={styles.topBar}>
-            <Text style={styles.wordmark}>
-              <Text style={styles.wordmarkLife}>Life</Text>
-              <Text style={styles.wordmarkPass}>Pass</Text>
-            </Text>
+            <Wordmark height={20} />
 
             <View style={styles.topBarRight}>
               <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
@@ -135,29 +190,38 @@ export default function HomeScreen() {
               {greeting}, <Text style={styles.greetingName}>{firstName}.</Text>
             </Text>
 
-            {hero && (
-              <View style={styles.pickupCard}>
-                <Image source={{ uri: hero.imageUrl }} style={styles.pickupImage} />
-                <View style={styles.pickupText}>
-                  <Text style={styles.pickupKicker}>PICK UP WHERE YOU LEFT OFF</Text>
-                  <Text style={styles.pickupVenue} numberOfLines={1}>
-                    {hero.name}
-                  </Text>
-                  <Text style={styles.pickupSub} numberOfLines={1}>
-                    {hero.city}
-                  </Text>
+            {/* UPCOMING card — shows the soonest booking, or a "No upcoming
+                bookings" empty state with an Explore CTA (mirrors iOS). */}
+            <View style={styles.pickupCard}>
+              {upcomingBooking ? (
+                <Image
+                  source={{ uri: upcomingBooking.venueImageUrl || hero?.imageUrl }}
+                  style={styles.pickupImage}
+                />
+              ) : (
+                <View style={styles.pickupIconTile}>
+                  <Ionicons name="calendar-outline" size={24} color={colors.paper3} />
                 </View>
-                <TouchableOpacity
-                  style={styles.bookButton}
-                  onPress={() => openVenue(hero.id)}
-                  activeOpacity={0.85}
-                >
-                  <Text style={styles.bookButtonText}>
-                    Book · {hero.creditCost} →
-                  </Text>
-                </TouchableOpacity>
+              )}
+              <View style={styles.pickupText}>
+                <Text style={styles.pickupKicker}>UPCOMING</Text>
+                <Text style={styles.pickupVenue} numberOfLines={1}>
+                  {upcomingBooking ? upcomingBooking.venueName : 'No upcoming bookings'}
+                </Text>
+                <Text style={styles.pickupSub} numberOfLines={1}>
+                  {upcomingBooking ? bookingWhen(upcomingBooking.bookingTime) : 'Explore nearby'}
+                </Text>
               </View>
-            )}
+              <TouchableOpacity
+                style={styles.bookButton}
+                onPress={() => (upcomingBooking ? openBookings() : openExplore())}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.bookButtonText}>
+                  {upcomingBooking ? 'View' : 'Explore'} →
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -208,8 +272,8 @@ export default function HomeScreen() {
             <View style={styles.shelf}>
               <View style={styles.shelfHeader}>
                 <View>
-                  <Kicker text={`Curated · ${greeting.toLowerCase()}`} />
-                  <Text style={styles.shelfTitle}>Picked for you</Text>
+                  <Kicker text="Popular" />
+                  <Text style={styles.shelfTitle}>Most Popular Now</Text>
                 </View>
               </View>
 
@@ -235,27 +299,34 @@ export default function HomeScreen() {
 // Quick-tap prompts shown in the AskCard. Each chip's `prompt` is what
 // gets sent to Coach when tapped.
 const ASK_CHIPS: { label: string; prompt: string }[] = [
-  { label: 'Quiet evening', prompt: 'Suggest a quiet, relaxing evening for me.' },
-  { label: 'Lagoon enthusiast', prompt: 'Suggest a quiet, relaxing evening for me.' },
- { label: '30 min sweat', prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
-  { label: 'Try something new', prompt: 'I want to try something new — what do you suggest?' },
+  { label: 'Lagoon enthusiast', prompt: 'Plan a perfect spa or lagoon evening for me.' },
+  { label: '30 min sweat', prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
   { label: 'After work', prompt: "It's after 6pm. What's a good way to wind down nearby?" }
 ];
 
-const ASK_EXAMPLE = '"Find me a quiet 45-minute swim near work after 6pm"';
+const ASK_PLACEHOLDER = 'Find me a quiet 45-minute swim near work…';
 
 function TryNewSection({
   onPromptSelected,
 }: {
   onPromptSelected: (prompt: string) => void;
 }) {
+  const [input, setInput] = useState('');
+
+  function send() {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+    setInput('');
+    onPromptSelected(trimmed);
+  }
+
   return (
     <View style={trySection.container}>
       <Text style={trySection.heading}>
         Want to try{' '}
         <Text style={trySection.italic}>something new?</Text>
       </Text>
-f
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -274,10 +345,31 @@ f
         ))}
       </ScrollView>
 
-      {/* Ask AI CHAT Box */}
+      {/* Ask card — real text input + a single row of quick-prompt chips */}
       <View style={askCard.container}>
-        <Text style={askCard.example}>{ASK_EXAMPLE}</Text>
-        <View style={askCard.chips}>
+        <View style={askCard.inputRow}>
+          <TextInput
+            style={askCard.input}
+            value={input}
+            onChangeText={setInput}
+            placeholder={ASK_PLACEHOLDER}
+            placeholderTextColor={colors.paper3}
+            multiline
+            returnKeyType="send"
+            onSubmitEditing={send}
+          />
+          {input.trim().length > 0 && (
+            <TouchableOpacity onPress={send} activeOpacity={0.8} hitSlop={8}>
+              <Ionicons name="arrow-up-circle" size={28} color={colors.skyBlue} />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={askCard.chipsRow}
+        >
           {ASK_CHIPS.map((chip) => (
             <TouchableOpacity
               key={chip.label}
@@ -288,7 +380,7 @@ f
               <Text style={askCard.chipText}>{chip.label}</Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
       </View>
     </View>
   );
@@ -335,7 +427,7 @@ const trySection = StyleSheet.create({
   },
 });
 
-// ─── Ask-card (example query + tappable chips) ────────────────────────────────
+// ─── Ask-card (text input + tappable quick-prompt chips) ──────────────────────
 
 const askCard = StyleSheet.create({
   container: {
@@ -347,16 +439,26 @@ const askCard = StyleSheet.create({
     gap: 14,
     marginTop: 4,
   },
-  example: {
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: colors.ink3,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.line2,
+  },
+  input: {
+    flex: 1,
     fontSize: 15,
     color: colors.paper,
-    fontStyle: 'italic',
-    lineHeight: 22,
-    letterSpacing: -0.2,
+    padding: 0,
+    maxHeight: 72,
   },
-  chips: {
+  chipsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     gap: 8,
   },
   chip: {
@@ -391,9 +493,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  wordmark: { fontSize: 22 },
-  wordmarkLife: { color: colors.paper, fontWeight: '600' },
-  wordmarkPass: { color: colors.paper, fontStyle: 'italic', fontWeight: '400' },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
     // Frosted glass — matches the credit pill.
@@ -430,6 +529,13 @@ const styles = StyleSheet.create({
     width: 60, height: 60,
     borderRadius: 12,
     backgroundColor: 'rgba(255, 255, 255, 0.05)',
+  },
+  pickupIconTile: {
+    width: 60, height: 60,
+    borderRadius: 12,
+    backgroundColor: colors.ink3,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   pickupText: { flex: 1, gap: 2 },
   pickupKicker: {

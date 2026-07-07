@@ -10,8 +10,9 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
-import { signIn, resetPassword } from '../../supabase/services/auth';
+import { signIn, signInWithGoogle, resetPassword } from '../../supabase/services/auth';
 import Wordmark from '../../components/Wordmark';
 import AuthField from '../../components/AuthField';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -24,6 +25,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [resetSent, setResetSent] = useState(false);
 
   async function handleSignIn() {
@@ -40,6 +42,20 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
       setError(friendlyAuthError(e.message));
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleGoogleSignIn() {
+    setError(null);
+    setGoogleLoading(true);
+    try {
+      // Returns null if the user closed the browser sheet — not an error.
+      await signInWithGoogle();
+      // Navigation happens automatically — RootNavigator reacts to onAuthStateChange
+    } catch (e: any) {
+      setError(e.message ?? 'Google sign-in failed.');
+    } finally {
+      setGoogleLoading(false);
     }
   }
 
@@ -79,7 +95,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.brand}>
-            <Wordmark size={36} />
+            <Wordmark height={30} />
             <Text style={styles.tagline}>The everyday wellness pass.</Text>
           </View>
 
@@ -114,6 +130,25 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
               loading={loading}
             />
           </View>
+
+          {/* ── Social sign-in ── */}
+          <View style={styles.dividerRow}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>or</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.googleBtn}
+            onPress={handleGoogleSignIn}
+            disabled={googleLoading || loading}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="logo-google" size={16} color={colors.paper} />
+            <Text style={styles.googleText}>
+              {googleLoading ? 'Connecting…' : 'Continue with Google'}
+            </Text>
+          </TouchableOpacity>
 
           <View style={styles.links}>
             <TouchableOpacity onPress={handleForgotPassword}>
@@ -160,6 +195,27 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   cta: { marginTop: 22 },
+  dividerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 20,
+  },
+  dividerLine: { flex: 1, height: StyleSheet.hairlineWidth, backgroundColor: colors.line2 },
+  dividerText: { fontSize: 12, color: colors.paper3 },
+  googleBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    height: 52,
+    marginTop: 20,
+    borderRadius: 14,
+    backgroundColor: colors.ink2,
+    borderWidth: 1,
+    borderColor: colors.line2,
+  },
+  googleText: { fontSize: 15, fontWeight: '600', color: colors.paper },
   links: { marginTop: 20, alignItems: 'center', gap: 16 },
   forgot: { fontSize: 13, color: colors.paper2 },
   signupRow: { flexDirection: 'row', alignItems: 'center' },

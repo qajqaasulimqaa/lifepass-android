@@ -4,7 +4,6 @@ import {
   fetchFavouriteVenues,
   addFavouriteVenue,
   removeFavouriteByVenue,
-  isFavourited,
 } from '../services/favourites';
 
 type FavouritesState = {
@@ -33,13 +32,21 @@ export function useFavouriteVenues(): FavouritesState {
   useEffect(() => { load(); }, [load]);
 
   async function toggle(venueId: string) {
-    const already = await isFavourited(venueId);
-    if (already) {
-      await removeFavouriteByVenue(venueId);
-      setSavedVenues((prev) => prev.filter((v) => v.id !== venueId));
-    } else {
-      await addFavouriteVenue(venueId);
-      load(); // refetch to get the full adapted row
+    // The loaded list already tells us the state — no probe round-trip.
+    const already = savedVenues.some((v) => v.id === venueId);
+    try {
+      if (already) {
+        await removeFavouriteByVenue(venueId);
+        setSavedVenues((prev) => prev.filter((v) => v.id !== venueId));
+      } else {
+        await addFavouriteVenue(venueId);
+        load(); // refetch to get the full adapted row
+      }
+    } catch (e) {
+      // Surface instead of vanishing as an unhandled rejection — a silent
+      // failure here is exactly what hid the broken-backend bug.
+      console.warn('[Favourites] toggle failed:', e);
+      setError(e instanceof Error ? e.message : 'Could not update favourites');
     }
   }
 

@@ -69,6 +69,17 @@ export function tierLetter(sub: Subscription): string | null {
 
 export function planDisplayName(sub: Subscription): string {
   const map: Record<string, string> = {
+    // v1 product slugs (same labels as iOS Subscription.swift)
+    'plan-base': 'LifePass Base',
+    'plan-base-annual': 'LifePass Base',
+    'plan-plus': 'LifePass Plus',
+    'plan-plus-annual': 'LifePass Plus',
+    'plan-max': 'LifePass Max',
+    'plan-max-annual': 'LifePass Max',
+    'pass-explorer': 'Explorer',
+    'pass-adventurer': 'Adventurer',
+    'pass-local': 'Local',
+    // legacy slugs — still in old subscription rows
     starter: 'LayOver',
     explorer: 'Week Warrior',
     wellness: 'Extended Stay',

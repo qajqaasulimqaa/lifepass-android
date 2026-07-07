@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { useBookings } from '../../supabase/hooks/useBookings';
@@ -18,7 +18,7 @@ import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import BrandedTopBar from '../../components/BrandedTopBar';
 import ProfileCreditCard from '../../components/ProfileCreditCard';
-import CreditPill from '../../components/CreditPill';
+import PricePill from '../../components/PricePill';
 import Kicker from '../../components/Kicker';
 import EmptyState from '../../components/EmptyState';
 import type { Booking } from '../../types/booking';
@@ -48,12 +48,19 @@ function whenString(date: Date): string {
 
 export default function BookingsScreen() {
   const navigation = useNavigation<Nav>();
+  const route = useRoute<RouteProp<BookingsStackParamList, 'BookingsMain'>>();
   const [topTab, setTopTab] = useState<TopTab>('bookings');
   const [subTab, setSubTab] = useState<BookingsSubTab>('upcoming');
 
+  // Deep-link from the Coach drawer ("Saved") — honour the requested tab
+  // whenever the param changes, not just on mount.
+  useEffect(() => {
+    if (route.params?.initialTab) setTopTab(route.params.initialTab);
+  }, [route.params?.initialTab]);
+
   const { bookings: upcomingBookings, loading: loadingUp } = useBookings(true);
   const { bookings: pastBookings, loading: loadingPast } = useBookings(false);
-  const { savedVenues, savedVenueIds, loading: loadingFavs } = useFavouriteVenues();
+  const { savedVenues, savedVenueIds, loading: loadingFavs, toggle } = useFavouriteVenues();
   const { venues, loading: loadingVenues } = useVenues();
 
   const loading = loadingUp || loadingPast || loadingFavs;
@@ -67,7 +74,7 @@ export default function BookingsScreen() {
 
   return (
     <View style={styles.container}>
-      <BrandedTopBar title="Library" subtitle="Bookings & saved" />
+      <BrandedTopBar title="Library" subtitle="Bookings & saved" trailing="settings" />
 
       {/* Profile + credits card */}
       <View style={styles.profileCardWrap}>
@@ -107,6 +114,7 @@ export default function BookingsScreen() {
           savedActivities={[]}
           suggestions={suggestions}
           openVenue={openVenue}
+          onUnsave={toggle}
         />
       )}
     </View>
@@ -215,11 +223,13 @@ function SavedTab({
   savedActivities,
   suggestions,
   openVenue,
+  onUnsave,
 }: {
   savedVenues: Venue[];
   savedActivities: Activity[];
   suggestions: Venue[];
   openVenue: (venueId: string) => void;
+  onUnsave: (venueId: string) => void;
 }) {
   return (
     <ScrollView contentContainerStyle={styles.scrollSaved} showsVerticalScrollIndicator={false}>
@@ -234,7 +244,7 @@ function SavedTab({
         <View style={styles.list}>
           {savedVenues.map((v) => (
             <TouchableOpacity key={v.id} activeOpacity={0.85} onPress={() => openVenue(v.id)}>
-              <SavedVenueRow venue={v} />
+              <SavedVenueRow venue={v} onUnsave={() => onUnsave(v.id)} />
             </TouchableOpacity>
           ))}
         </View>
@@ -333,7 +343,6 @@ function UpcomingCard({ booking }: { booking: Booking }) {
           </View>
         </View>
       </View>
-      <CreditPill credits={booking.creditCost} compact />
     </View>
   );
 }
@@ -355,12 +364,11 @@ function PastRow({ booking }: { booking: Booking }) {
           {booking.activityName} · {whenString(booking.bookingTime)}
         </Text>
       </View>
-      <Text style={pastStyles.cost}>−{booking.creditCost} cr</Text>
     </View>
   );
 }
 
-function SavedVenueRow({ venue }: { venue: Venue }) {
+function SavedVenueRow({ venue, onUnsave }: { venue: Venue; onUnsave: () => void }) {
   return (
     <View style={rowStyles.row}>
       <Image source={{ uri: venue.imageUrl }} style={rowStyles.image} />
@@ -374,7 +382,17 @@ function SavedVenueRow({ venue }: { venue: Venue }) {
           <Text style={rowStyles.savedText}>Saved</Text>
         </View>
       </View>
-      <CreditPill credits={venue.creditCost} compact />
+      <PricePill venue={venue} compact />
+      {/* Unsave — filled heart in a circle, same affordance as the iOS
+          saved rows. Inner touchable wins over the row's open-venue tap. */}
+      <TouchableOpacity
+        style={rowStyles.heartBtn}
+        onPress={onUnsave}
+        activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+      >
+        <Ionicons name="heart" size={14} color={colors.blueMid} />
+      </TouchableOpacity>
     </View>
   );
 }
@@ -523,7 +541,6 @@ const pastStyles = StyleSheet.create({
   luxuryChip: { backgroundColor: 'rgba(168,216,240,0.14)', borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2 },
   luxuryChipText: { fontSize: 9, fontWeight: '700', color: colors.skyBlue, letterSpacing: 0.6 },
   detail: { fontSize: 11, color: colors.paper3 },
-  cost: { fontSize: 11, color: colors.paper3 },
 });
 
 const rowStyles = StyleSheet.create({
@@ -543,6 +560,16 @@ const rowStyles = StyleSheet.create({
   city: { fontSize: 12, color: colors.paper3 },
   savedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   savedText: { fontSize: 11, fontWeight: '600', color: colors.blueMid },
+  heartBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: colors.ink3,
+    borderWidth: 1,
+    borderColor: colors.line2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
 });
 
 const activityRowStyles = StyleSheet.create({

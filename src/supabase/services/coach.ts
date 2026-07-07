@@ -1,4 +1,4 @@
-import { supabase } from '../lib/client';
+import { apiPost } from '../../api/client';
 import type { ChatMessage, CoachReply, VenueCard } from '../../types/coach';
 
 type CoachMessage = { role: 'user' | 'assistant'; content: string };
@@ -27,37 +27,18 @@ function parseReply(raw: string): CoachReply {
   return { text: raw };
 }
 
+// POST /api/v1/coach on the LifePass backend (same endpoint as iOS) —
+// Supabase bearer auth, server-side rate limiting, and the Anthropic key
+// never leaves the server. Contract:
+//   POST { messages: [{ role, content }] } → { ok, data: { reply } }
+// The backend drops leading assistant messages (the greeting) itself.
 export async function sendCoachMessage(history: ChatMessage[]): Promise<CoachReply> {
   const messages: CoachMessage[] = history.map((m) => ({
     role: m.role,
     content: m.text,
   }));
 
-  const apiUrl = process.env.EXPO_PUBLIC_COACH_API_URL;
-
-  if (apiUrl) {
-    const res = await fetch(apiUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages }),
-    });
-    const data = (await res.json().catch(() => null)) as
-      | { reply?: string; error?: string }
-      | null;
-    if (!res.ok || data?.error) {
-      throw new Error(data?.error ?? `Coach API ${res.status}`);
-    }
-    if (!data?.reply) throw new Error('Empty response from coach');
-    return parseReply(data.reply);
-  }
-
-  const { data, error } = await supabase.functions.invoke<{ reply: string; error?: string }>(
-    'coach',
-    { body: { messages } },
-  );
-
-  if (error) throw new Error(error.message);
-  if (data?.error) throw new Error(data.error);
-  if (!data?.reply) throw new Error('Empty response from coach');
-  return parseReply(data.reply);
+  const { reply } = await apiPost<{ reply: string }>('/coach', { messages });
+  if (!reply) throw new Error('Empty response from coach');
+  return parseReply(reply);
 }

@@ -14,8 +14,14 @@ export type ActivityTag =
 export type SuggestionChip = {
   id: string;
   text: string;
+  /** Sent to the coach when tapped. Empty for category-strip chips. */
   prompt: string;
-  tags: ActivityTag[];
+  /**
+   * When true the chip doesn't name a venue type — tapping it shows the
+   * category strip so the member picks what they're after (mirrors iOS
+   * `showsCategoryStrip`).
+   */
+  showsCategoryStrip?: boolean;
 };
 
 export type RecentChat = { id: string; title: string };
@@ -33,92 +39,28 @@ export const mockCoachMessages: ChatMessage[] = [
   },
 ];
 
-// ─── Chip bank (8 chips, each tagged with activity context) ───────────────────
+// ─── Suggestion chips (mirrors iOS CoachView.suggestionChips) ─────────────────
+//
+// Three of the four don't name a specific venue type, so rather than
+// presuming one they show the category strip and let the member pick.
+// "Lagoon enthusiast" names its type, so it sends a prompt the venue-search
+// detector picks up and runs the lagoon wizard on.
 
-export const chipBank: SuggestionChip[] = [
-  {
-    id: 'c1',
-    text: 'Plan my week',
-    tags: ['general'],
-    prompt: 'Help me plan a 4-day wellness week with strength and recovery.',
-  },
-  {
-    id: 'c2',
-    text: 'After the gym',
-    tags: ['gym', 'recovery'],
-    prompt: "I just finished a hard gym session. What should I do to recover well today?",
-  },
+export const suggestionChips: SuggestionChip[] = [
+  { id: 'c1', text: "What's nearby?",    prompt: '', showsCategoryStrip: true },
+  { id: 'c2', text: 'After work',        prompt: '', showsCategoryStrip: true },
   {
     id: 'c3',
-    text: 'Find lagoons',
-    tags: ['lagoon', 'recovery'],
-    prompt: 'Show me geothermal lagoons I can visit in Iceland.',
+    text: 'Lagoon enthusiast',
+    prompt: 'I love geothermal lagoons — which ones should I try next in Iceland?',
   },
-  {
-    id: 'c4',
-    text: 'Yoga studios',
-    tags: ['yoga'],
-    prompt: 'Show me yoga studios available in Reykjavík.',
-  },
-  {
-    id: 'c5',
-    text: 'Swimming pools',
-    tags: ['swimming'],
-    prompt: 'Show me the best swimming pools near Reykjavík.',
-  },
-  {
-    id: 'c6',
-    text: 'Find gyms',
-    tags: ['gym'],
-    prompt: 'Show me gyms I can visit in Reykjavík.',
-  },
-  {
-    id: 'c7',
-    text: 'Spas & saunas',
-    tags: ['recovery'],
-    prompt: 'Show me spas and saunas I can visit in Iceland.',
-  },
-  {
-    id: 'c8',
-    text: 'Use my credits',
-    tags: ['credits', 'general'],
-    prompt: "I have credits to use before they expire. What's the best way to spend them?",
-  },
+  { id: 'c4', text: 'Something new',     prompt: '', showsCategoryStrip: true },
 ];
 
-/**
- * Pick the 4 chips most relevant to the user's current activity profile.
- * Chips are scored by how many of their tags match the user's activity tags.
- * Ties preserve the original bank order.
- */
-export function selectChips(userTags: ActivityTag[]): SuggestionChip[] {
-  const tagSet = new Set(userTags);
-
-  const scored = chipBank.map((chip) => ({
-    chip,
-    // each matching tag +1, 'general' always gets +0.5 so it fills gaps
-    score: chip.tags.reduce(
-      (acc, t) => acc + (tagSet.has(t) ? 1 : 0) + (t === 'general' ? 0.5 : 0),
-      0,
-    ),
-  }));
-
-  // Stable sort — ties keep bank order
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 4)
-    .map((s) => s.chip);
+/** Same four chips for everyone — kept as a function for the call site. */
+export function selectChips(_userTags: ActivityTag[]): SuggestionChip[] {
+  return suggestionChips;
 }
 
-// ─── Recent chats ─────────────────────────────────────────────────────────────
-
-export const recentChats: RecentChat[] = [
-  { id: 'r1', title: 'Cool pools nearby' },
-  { id: 'r2', title: 'Gyms and leg day' },
-  { id: 'r3', title: 'Lagoons worth visiting' },
-  { id: 'r4', title: 'Core and MMA practice' },
-  { id: 'r5', title: 'Yoga for beginners' },
-  { id: 'r6', title: 'Recovery after marathon' },
-  { id: 'r7', title: 'Best lagoons in Reykjavík' },
-];
+// (The RECENTS list is real now — persisted sessions in src/coach/chatSessions.ts.)
 
