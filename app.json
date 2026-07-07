@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "LifePass",
-    "slug": "lifepass-app",
+    "slug": "lifepass-iceland",
     "version": "1.0.0",
     "scheme": "lifepass",
     "orientation": "portrait",
@@ -18,7 +18,9 @@
       "bundleIdentifier": "is.lifepass.ios",
       "buildNumber": "1",
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "LifePass uses your location to suggest wellness venues near you."
+        "NSLocationWhenInUseUsageDescription": "LifePass uses your location to suggest wellness venues near you.",
+        "NSSpeechRecognitionUsageDescription": "Allow LifePass to use speech recognition so you can speak to your wellness coach.",
+        "NSMicrophoneUsageDescription": "Allow LifePass to use the microphone for voice input."
       }
     },
     "android": {
@@ -30,7 +32,8 @@
       },
       "edgeToEdgeEnabled": true,
       "permissions": [
-        "android.permission.ACCESS_COARSE_LOCATION"
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -54,6 +57,12 @@
       ],
       "expo-web-browser",
       "expo-font"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "a5813f67-0cd8-439f-a597-9681dcbc0368"
+      }
+    },
+    "owner": "lifepass"
   }
 }
