@@ -32,18 +32,18 @@ const SLIDE_DATA = {
     image: 'https://images.unsplash.com/photo-1604537466158-719b1972feb8?auto=format&fit=crop&w=1400&q=80',
   },
   2: {
-    kicker: '02 — Credits, not chaos',
+    kicker: '02 — One plan, no chaos',
     plain: 'Pay for how\nyou ',
     italic: 'actually',
     plain2: ' show up.',
-    body: 'One yoga class, one credit. A lagoon ritual, four. Pick a plan that matches your tempo. Cancel after three months.',
+    body: 'Gyms, pools and studios included in your plan. Premium lagoons pay-as-you-go. Pick a tempo that matches yours — cancel after three months.',
     image: 'https://images.unsplash.com/photo-1610552050890-fe99536c2615?auto=format&fit=crop&w=1400&q=80',
   },
   3: {
     kicker: '03 — One code, every door',
     plain: 'Scan in.\n',
     italic: 'No queue at the desk.',
-    body: 'Your personal QR works at every partner. Credits deduct automatically — never fumble for cash at the lobby.',
+    body: 'Your personal QR works at every partner. Check-ins count automatically — never fumble for cash at the lobby.',
     image: 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=1400&q=80',
   },
 } as const;
