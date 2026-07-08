@@ -637,23 +637,6 @@ export default function CoachScreen() {
         style={styles.bg}
         resizeMode="cover"
       >
-        {/* TEMP DEBUG — remove once keyboard behaviour is confirmed. */}
-        {__DEV__ && (
-          <Text
-            style={{
-              position: 'absolute',
-              top: insets.top + 4,
-              right: 12,
-              zIndex: 9999,
-              color: '#FFD400',
-              fontWeight: '700',
-              fontSize: 16,
-            }}
-          >
-            kb={Math.round(keyboardHeight)} ins={Math.round(insets.bottom)} win=
-            {Math.round(Dimensions.get('window').height)}
-          </Text>
-        )}
         <View style={styles.overlayTop} />
         <View style={styles.overlayBottom} />
 
