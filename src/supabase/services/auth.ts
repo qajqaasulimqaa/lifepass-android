@@ -4,9 +4,9 @@ import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import { supabase } from '../lib/client';
 
 /**
- * Mirrors iOS AuthService.swift.
- * Deep-link handling (email confirmation) is wired in App.tsx via
- * Expo's Linking API — see auth callback URL below.
+ * Mirrors iOS AuthService.swift. Email-confirmation / magic-link callbacks
+ * arrive as a `lifepass://auth/callback` deep link; App.tsx forwards the URL
+ * to completeAuthFromUrl() below (mirrors iOS `.onOpenURL → session(from:)`).
  */
 
 // Flushes a pending browser auth session on app resume (no-op otherwise).
@@ -50,6 +50,27 @@ export async function signInWithGoogle() {
   });
   if (sessionError) throw sessionError;
   return sessionData.session;
+}
+
+/**
+ * Complete a sign-in from an incoming deep link — the email-confirmation or
+ * magic link redirects to `lifepass://auth/callback` with the session tokens
+ * in the URL fragment. Extract them and establish the session. No-op for
+ * unrelated URLs. Mirrors iOS AuthService's `.onOpenURL` → `session(from:)`.
+ *
+ * NOTE: the redirect only reaches here if `lifepass://auth/callback` (and
+ * `lifepass://**`) are allowlisted in Supabase → Auth → URL Configuration →
+ * Redirect URLs — otherwise the browser lands on about:blank.
+ */
+export async function completeAuthFromUrl(url: string): Promise<boolean> {
+  if (!url.includes('auth/callback')) return false;
+  const { params, errorCode } = QueryParams.getQueryParams(url);
+  if (errorCode) throw new Error(errorCode);
+  const { access_token, refresh_token } = params;
+  if (!access_token || !refresh_token) return false;
+  const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+  if (error) throw error;
+  return true;
 }
 
 export async function signIn(email: string, password: string) {
