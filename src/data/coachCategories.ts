@@ -19,7 +19,7 @@ export const coachCategories: CoachCategory[] = [
     id: 'pools',
     label: 'Icelandic Pools',
     image: require('../../assets/categories/pools.jpg'),
-    prompt: 'I want to try Icelandic swimming pools — which ones are best to start with this week?',
+    prompt: 'I want to try Icelandic swimming pools. Which ones are best to start with this week?',
   },
   {
     id: 'gyms',
@@ -31,7 +31,7 @@ export const coachCategories: CoachCategory[] = [
     id: 'wellness',
     label: 'Wellness',
     image: require('../../assets/categories/wellness.jpg'),
-    prompt: "I'd like a relaxing wellness day — what do you suggest?",
+    prompt: "I'd like a relaxing wellness day. What do you suggest?",
   },
   {
     id: 'golf',
@@ -49,6 +49,6 @@ export const coachCategories: CoachCategory[] = [
     id: 'yoga',
     label: 'Yoga & Pilates',
     image: require('../../assets/categories/yoga.jpg'),
-    prompt: "I'm new to yoga — where should I start in Reykjavík?",
+    prompt: "I'm new to yoga. Where should I start in Reykjavík?",
   },
 ];

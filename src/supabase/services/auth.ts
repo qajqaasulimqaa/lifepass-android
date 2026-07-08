@@ -41,7 +41,7 @@ export async function signInWithGoogle() {
   if (errorCode) throw new Error(errorCode);
   const { access_token, refresh_token } = params;
   if (!access_token || !refresh_token) {
-    throw new Error(params.error_description ?? 'Google sign-in failed — no session returned.');
+    throw new Error(params.error_description ?? 'Google sign-in failed. No session returned.');
   }
 
   const { data: sessionData, error: sessionError } = await supabase.auth.setSession({

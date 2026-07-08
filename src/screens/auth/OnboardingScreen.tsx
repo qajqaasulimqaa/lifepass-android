@@ -25,25 +25,25 @@ const SPLASH_IMAGE =
 
 const SLIDE_DATA = {
   1: {
-    kicker: '01 — Forty venues',
-    plain: 'Lagoons, studios,\nsaunas, gyms — ',
+    kicker: '01 · Forty venues',
+    plain: 'Lagoons, studios,\nsaunas, gyms, ',
     italic: 'one tap away.',
     body: 'From Sky Lagoon to the basement mats at Mjölnir. Every partner, one pass.',
     image: 'https://images.unsplash.com/photo-1604537466158-719b1972feb8?auto=format&fit=crop&w=1400&q=80',
   },
   2: {
-    kicker: '02 — One plan, no chaos',
+    kicker: '02 · One plan, no chaos',
     plain: 'Pay for how\nyou ',
     italic: 'actually',
     plain2: ' show up.',
-    body: 'Gyms, pools and studios included in your plan. Premium lagoons pay-as-you-go. Pick a tempo that matches yours — cancel after three months.',
+    body: 'Gyms, pools and studios included in your plan. Premium lagoons pay-as-you-go. Pick a tempo that matches yours, cancel anytime after three months.',
     image: 'https://images.unsplash.com/photo-1610552050890-fe99536c2615?auto=format&fit=crop&w=1400&q=80',
   },
   3: {
-    kicker: '03 — One code, every door',
+    kicker: '03 · One code, every door',
     plain: 'Scan in.\n',
     italic: 'No queue at the desk.',
-    body: 'Your personal QR works at every partner. Check-ins count automatically — never fumble for cash at the lobby.',
+    body: 'Your personal QR works at every partner. Check-ins count automatically, so you never fumble for cash at the lobby.',
     image: 'https://images.unsplash.com/photo-1570197788417-0e82375c9371?auto=format&fit=crop&w=1400&q=80',
   },
 } as const;

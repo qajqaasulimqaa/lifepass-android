@@ -63,7 +63,7 @@ export async function fetchWeather(): Promise<WeatherSnapshot> {
 export function weatherRecommendation(weather: WeatherSnapshot): string {
   const { temperature, icon } = weather;
 
-  if (icon === 'thunderstorm') return 'STAY IN — SAUNA DAY';
+  if (icon === 'thunderstorm') return 'STAY IN · SAUNA DAY';
   if (icon === 'snow') return 'HOT SPRING WEATHER';
   if (icon === 'rainy') return 'LAGOON WEATHER';
 

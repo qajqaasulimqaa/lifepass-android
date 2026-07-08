@@ -120,7 +120,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
 
           {error && <Text style={styles.error}>{error}</Text>}
           {resetSent && (
-            <Text style={styles.success}>Password reset email sent — check your inbox.</Text>
+            <Text style={styles.success}>Password reset email sent. Check your inbox.</Text>
           )}
 
           <View style={styles.cta}>
@@ -172,7 +172,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
 function friendlyAuthError(message: string): string {
   if (message.includes('Invalid login credentials')) return 'Incorrect email or password.';
   if (message.includes('Email not confirmed')) return 'Please confirm your email first.';
-  if (message.includes('Too many requests')) return 'Too many attempts — wait a moment and try again.';
+  if (message.includes('Too many requests')) return 'Too many attempts. Wait a moment and try again.';
   return message;
 }
 

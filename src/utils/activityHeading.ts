@@ -100,7 +100,7 @@ export function deriveHomeTagline(
   if (!last && next) {
     const label = activityLabel(next);
     const when  = upcomingLabel(next.bookingTime);
-    return `${label} ${when} — get ready.`;
+    return `${label} ${when}. Get ready.`;
   }
 
   const label = activityLabel(last!);

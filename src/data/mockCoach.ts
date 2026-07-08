@@ -34,7 +34,7 @@ export const mockCoachMessages: ChatMessage[] = [
   {
     id: 'm1',
     role: 'assistant',
-    text: "Hi — I'm your LifePass coach. Ask me about venues near you, or tap a suggestion below.",
+    text: "Hi! I'm your LifePass coach. Ask me about venues near you, or tap a suggestion below.",
     createdAt: minutesAgo(1),
   },
 ];
@@ -52,7 +52,7 @@ export const suggestionChips: SuggestionChip[] = [
   {
     id: 'c3',
     text: 'Lagoon enthusiast',
-    prompt: 'I love geothermal lagoons — which ones should I try next in Iceland?',
+    prompt: 'I love geothermal lagoons. Which ones should I try next in Iceland?',
   },
   { id: 'c4', text: 'Something new',     prompt: '', showsCategoryStrip: true },
 ];

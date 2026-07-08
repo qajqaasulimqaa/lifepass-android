@@ -300,7 +300,7 @@ export default function HomeScreen() {
 // gets sent to Coach when tapped.
 const ASK_CHIPS: { label: string; prompt: string }[] = [
   { label: 'Lagoon enthusiast', prompt: 'Plan a perfect spa or lagoon evening for me.' },
-  { label: '30 min sweat', prompt: 'I have 30 minutes — what is a quick high-intensity workout?' },
+  { label: '30 min sweat', prompt: 'I have 30 minutes. What is a quick high-intensity workout?' },
   { label: 'After work', prompt: "It's after 6pm. What's a good way to wind down nearby?" }
 ];
 

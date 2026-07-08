@@ -64,7 +64,7 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
         <Text style={styles.confirmBody}>
           We sent a confirmation link to{'\n'}
           <Text style={{ color: colors.paper }}>{email}</Text>.{'\n\n'}
-          Tap the link in your inbox to activate your account — then come back and sign in.
+          Tap the link in your inbox to activate your account, then come back and sign in.
         </Text>
         <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.confirmCta}>
           <Text style={styles.confirmCtaText}>Back to sign in</Text>

@@ -199,7 +199,7 @@ export default function CoachScreen() {
         {
           id: nextId(),
           role: 'assistant',
-          text: `Sorry — ${err}`,
+          text: `Sorry. ${err}`,
           createdAt: new Date(),
         },
       ]);
@@ -310,7 +310,7 @@ export default function CoachScreen() {
           return {
             venues: pool,
             note: pool.length > 0
-              ? "I don't have your location yet, so these are around Reykjavík — turn on location for spots near you:"
+              ? "I don't have your location yet, so these are around Reykjavík. Turn on location for spots near you:"
               : undefined,
           };
         }
@@ -320,7 +320,7 @@ export default function CoachScreen() {
           return {
             venues: all,
             note: all.length > 0
-              ? 'Nothing within a 15-minute drive — here are the closest:'
+              ? 'Nothing within a 15-minute drive, so here are the closest:'
               : undefined,
           };
         }
@@ -405,7 +405,7 @@ export default function CoachScreen() {
       if (gen !== chatGenRef.current) return; // chat was reset/restored mid-flight
       setMessages((m) => [...m, {
         id: nextId(), role: 'assistant',
-        text: "Sorry — I couldn't load venues right now. Please try again.",
+        text: "Sorry, I couldn't load venues right now. Please try again.",
         createdAt: new Date(),
       }]);
     } finally {
