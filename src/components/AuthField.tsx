@@ -1,4 +1,5 @@
-import { View, TextInput, StyleSheet, TextInputProps } from 'react-native';
+import { useState } from 'react';
+import { View, TextInput, TouchableOpacity, StyleSheet, TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 
@@ -18,6 +19,9 @@ export default function AuthField({
   secure,
   ...rest
 }: Props) {
+  // Show/hide toggle for secure fields — eye icon like the iOS auth forms.
+  const [visible, setVisible] = useState(false);
+
   return (
     <View style={styles.container}>
       {icon && (
@@ -29,11 +33,24 @@ export default function AuthField({
         placeholderTextColor={colors.paper3}
         value={value}
         onChangeText={onChangeText}
-        secureTextEntry={secure}
+        secureTextEntry={secure && !visible}
         autoCapitalize="none"
         autoCorrect={false}
         {...rest}
       />
+      {secure && (
+        <TouchableOpacity
+          onPress={() => setVisible((v) => !v)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          accessibilityLabel={visible ? 'Hide password' : 'Show password'}
+        >
+          <Ionicons
+            name={visible ? 'eye-off-outline' : 'eye-outline'}
+            size={17}
+            color={colors.paper3}
+          />
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
