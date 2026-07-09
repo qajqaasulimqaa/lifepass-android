@@ -11,7 +11,13 @@ type AuthState = {
 
 type AuthActions = {
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string, kennitala?: string) => Promise<void>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    nationality: string | undefined,
+    marketingOptIn: boolean,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 };
 
@@ -45,8 +51,8 @@ export function useAuth(): AuthState & AuthActions {
     signIn: async (email, password) => {
       await signIn(email, password);
     },
-    signUp: async (email, password, fullName, kennitala) => {
-      await signUp(email, password, fullName, kennitala);
+    signUp: async (email, password, fullName, nationality, marketingOptIn) => {
+      await signUp(email, password, fullName, nationality, marketingOptIn);
     },
     signOut: async () => {
       await signOut();

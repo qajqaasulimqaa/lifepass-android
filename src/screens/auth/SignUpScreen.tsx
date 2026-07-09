@@ -7,6 +7,9 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  Switch,
+  Pressable,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -14,6 +17,12 @@ import { colors } from '../../theme';
 import { signUp } from '../../supabase/services/auth';
 import AuthField from '../../components/AuthField';
 import PrimaryButton from '../../components/PrimaryButton';
+import {
+  COUNTRY_OPTIONS,
+  nationalityFromEmail,
+  nationalityLabel,
+  normalizeNationality,
+} from '../../utils/nationality';
 import type { AuthStackScreenProps } from '../../navigation/types';
 
 export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignUp'>) {
@@ -22,11 +31,29 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [kennitala, setKennitala] = useState('');
-  const [companyCode, setCompanyCode] = useState('');
+  // ISO alpha-2 nationality code, or '' when unset. Prefilled from the email
+  // TLD until the user picks one (mirrors iOS + the website).
+  const [nationality, setNationality] = useState('');
+  const [nationalityTouched, setNationalityTouched] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+
+  // Mirror the web/iOS signup: prefill nationality from the email TLD until
+  // the user picks one. Generic TLDs (gmail.com, …) leave it blank.
+  function handleEmailChange(v: string) {
+    setEmail(v);
+    setError(null);
+    if (!nationalityTouched) setNationality(nationalityFromEmail(v) ?? '');
+  }
+
+  function selectNationality(code: string) {
+    setNationalityTouched(true);
+    setNationality(code);
+    setPickerOpen(false);
+  }
 
   async function handleCreate() {
     setError(null);
@@ -40,7 +67,8 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
         email.trim(),
         password,
         fullName.trim(),
-        kennitala.trim() || undefined,
+        normalizeNationality(nationality) ?? undefined,
+        marketingOptIn,
       );
 
       if (!result.session) {
@@ -72,6 +100,10 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
       </View>
     );
   }
+
+  const nationalityText = nationality
+    ? nationalityLabel(nationality) ?? 'Nationality (optional)'
+    : 'Nationality (optional)';
 
   return (
     <View style={styles.container}>
@@ -106,7 +138,7 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
             <AuthField
               placeholder="Email"
               value={email}
-              onChangeText={(v) => { setEmail(v); setError(null); }}
+              onChangeText={handleEmailChange}
               keyboardType="email-address"
               autoComplete="email"
             />
@@ -117,23 +149,32 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
               secure
               autoComplete="new-password"
             />
-            <AuthField
-              placeholder="Kennitala (optional)"
-              value={kennitala}
-              onChangeText={setKennitala}
-              keyboardType="number-pad"
-            />
-            <AuthField
-              placeholder="Company code (optional)"
-              value={companyCode}
-              onChangeText={setCompanyCode}
-            />
-          </View>
 
-          <Text style={styles.kennitalaHint}>
-            Kennitala is optional. If you add it now, we'll walk you through identity
-            verification after you confirm your email.
-          </Text>
+            {/* Nationality picker — optional, prefilled from the email TLD */}
+            <TouchableOpacity
+              style={styles.selectField}
+              onPress={() => setPickerOpen(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={[styles.selectText, !nationality && styles.selectPlaceholder]}>
+                {nationalityText}
+              </Text>
+              <Ionicons name="chevron-down" size={16} color={colors.paper3} />
+            </TouchableOpacity>
+
+            {/* Marketing opt-in */}
+            <View style={styles.toggleRow}>
+              <Text style={styles.toggleLabel}>
+                Send me news and offers from LifePass
+              </Text>
+              <Switch
+                value={marketingOptIn}
+                onValueChange={setMarketingOptIn}
+                trackColor={{ false: colors.ink4, true: colors.blue }}
+                thumbColor="#fff"
+              />
+            </View>
+          </View>
 
           {error && <Text style={styles.error}>{error}</Text>}
 
@@ -157,6 +198,46 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Nationality picker modal */}
+      <Modal
+        visible={pickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPickerOpen(false)}
+      >
+        <Pressable style={styles.modalBackdrop} onPress={() => setPickerOpen(false)}>
+          <Pressable style={[styles.modalSheet, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={styles.modalHandle} />
+            <Text style={styles.modalTitle}>Nationality</Text>
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <TouchableOpacity
+                style={styles.optionRow}
+                onPress={() => selectNationality('')}
+              >
+                <Text style={[styles.optionText, styles.selectPlaceholder]}>
+                  Prefer not to say
+                </Text>
+                {!nationality && (
+                  <Ionicons name="checkmark" size={18} color={colors.blueMid} />
+                )}
+              </TouchableOpacity>
+              {COUNTRY_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.code}
+                  style={styles.optionRow}
+                  onPress={() => selectNationality(opt.code)}
+                >
+                  <Text style={styles.optionText}>{opt.label}</Text>
+                  {nationality === opt.code && (
+                    <Ionicons name="checkmark" size={18} color={colors.blueMid} />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -179,13 +260,66 @@ const styles = StyleSheet.create({
   title: { fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
   subtitle: { fontSize: 14, color: colors.paper3 },
   fields: { gap: 14 },
-  kennitalaHint: { fontSize: 11, color: colors.paper3, marginTop: -8 },
   error: { fontSize: 13, color: colors.destructive, textAlign: 'center' },
   cta: {},
   signinRow: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
   signinHint: { fontSize: 13, color: colors.paper3 },
   signinLink: { fontSize: 13, color: colors.blueMid, fontWeight: '600' },
   terms: { fontSize: 11, color: colors.paper3, textAlign: 'center', marginTop: 4 },
+
+  // Nationality select field (matches AuthField metrics)
+  selectField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 52,
+    paddingHorizontal: 16,
+    backgroundColor: colors.ink2,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+  },
+  selectText: { fontSize: 15, color: colors.paper },
+  selectPlaceholder: { color: colors.paper3 },
+
+  // Marketing toggle
+  toggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 4,
+  },
+  toggleLabel: { flex: 1, fontSize: 13, color: colors.paper2, lineHeight: 18 },
+
+  // Picker modal
+  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalSheet: {
+    maxHeight: '70%',
+    backgroundColor: colors.ink2,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+  },
+  modalHandle: {
+    alignSelf: 'center',
+    width: 36,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.line2,
+    marginBottom: 12,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: colors.paper, marginBottom: 8 },
+  optionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderBottomWidth: 0.5,
+    borderBottomColor: colors.line,
+  },
+  optionText: { fontSize: 15, color: colors.paper },
 
   // Email confirmation screen
   confirmCenter: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
