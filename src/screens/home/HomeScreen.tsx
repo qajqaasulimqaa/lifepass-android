@@ -20,10 +20,8 @@ import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import { useBookings } from '../../supabase/hooks/useBookings';
 import { useAuth } from '../../supabase/hooks/useAuth';
-import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { useWeather } from '../../hooks/useWeather';
 import { weatherRecommendation } from '../../services/weather';
-import CreditPill from '../../components/CreditPill';
 import Kicker from '../../components/Kicker';
 import Wordmark from '../../components/Wordmark';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
@@ -71,7 +69,6 @@ export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
-  const { credits } = useSubscription();
   const { venues, loading } = useVenues();
   const { bookings: upcomingBookings } = useBookings(true);
   const { weather } = useWeather();
@@ -165,9 +162,6 @@ export default function HomeScreen() {
             <Wordmark height={20} />
 
             <View style={styles.topBarRight}>
-              <TouchableOpacity onPress={openAccount} activeOpacity={0.7}>
-                <CreditPill credits={credits} />
-              </TouchableOpacity>
               <TouchableOpacity style={styles.avatar} onPress={openAccount}>
                 <Text style={styles.avatarInitial}>{initial}</Text>
               </TouchableOpacity>
@@ -495,7 +489,7 @@ const styles = StyleSheet.create({
   topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
-    // Frosted glass — matches the credit pill.
+    // Frosted glass.
     backgroundColor: 'rgba(20, 33, 57, 0.55)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 0.5, borderColor: 'rgba(255, 255, 255, 0.18)',
