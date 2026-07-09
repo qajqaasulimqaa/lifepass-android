@@ -39,6 +39,7 @@ async function request<T>(
     method: 'GET' | 'POST' | 'DELETE';
     query?: Record<string, string | number | undefined>;
     body?: unknown;
+    idempotencyKey?: string;
   },
 ): Promise<T> {
   const url = new URL(`${API_BASE}${path}`);
@@ -52,6 +53,9 @@ async function request<T>(
   const token = await bearerToken();
   if (token) headers.Authorization = `Bearer ${token}`;
   if (init.body !== undefined) headers['Content-Type'] = 'application/json';
+  // High-value writes (checkout, bookings, …) require an idempotency key so a
+  // network retry can't double-charge; the server caches the first result.
+  if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
 
   const res = await fetch(url.toString(), {
     method: init.method,
@@ -67,11 +71,20 @@ async function request<T>(
   }
 
   if (!res.ok || !body || body.ok !== true) {
-    const err = body && body.ok === false ? body.error : undefined;
+    // Two error shapes: the app envelope `{ ok: false, error }` and RFC-7807
+    // problem-details (`{ type, title, status, detail }`) that /api/v1 uses.
+    // For problem-details, `title` is the machine code (e.g.
+    // "kennitala_verification_required") and `detail` is the human message.
+    const envErr = body && body.ok === false ? body.error : undefined;
+    const problem = body as any;
     const message =
-      (typeof err === 'string' ? err : err?.message) ??
+      (typeof envErr === 'string' ? envErr : envErr?.message) ??
+      (typeof problem?.detail === 'string' ? problem.detail : undefined) ??
+      (typeof problem?.title === 'string' ? problem.title : undefined) ??
       `API request failed (${res.status})`;
-    const code = typeof err === 'object' ? err?.code : undefined;
+    const code =
+      (typeof envErr === 'object' ? envErr?.code : undefined) ??
+      (typeof problem?.title === 'string' ? problem.title : undefined);
     throw new ApiError(message, res.status, code);
   }
 
@@ -85,8 +98,12 @@ export async function apiGet<T>(
   return request<T>(path, { method: 'GET', query });
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  return request<T>(path, { method: 'POST', body });
+export async function apiPost<T>(
+  path: string,
+  body: unknown,
+  opts?: { idempotencyKey?: string },
+): Promise<T> {
+  return request<T>(path, { method: 'POST', body, idempotencyKey: opts?.idempotencyKey });
 }
 
 export async function apiDelete<T>(

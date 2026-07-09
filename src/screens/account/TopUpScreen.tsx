@@ -14,6 +14,8 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
 import Kicker from '../../components/Kicker';
 import PrimaryButton from '../../components/PrimaryButton';
+import KenniVerificationModal from '../../components/KenniVerificationModal';
+import { startCheckout } from '../../supabase/services/payments';
 
 // ─── Plan data (mirrors iOS Plan.swift — v1 product catalogue) ────────────────
 //
@@ -51,8 +53,8 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     subtitle: 'The regular',
     features: [
       'More monthly visits than Base',
-      'Member discount at premium venues',
       'In-bundle venues included',
+      'Premium venues pay-as-you-go',
       'Cancel after 3 months',
     ],
     isPopular: true,
@@ -64,7 +66,9 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     subtitle: 'Maximum access',
     features: [
       'The most monthly visits',
-      'Best member discount at premium venues',
+      // Backend grants the member surcharge rate to Max + pass holders only
+      // (charges.ts memberPriced) — don't promise it on other tiers.
+      'Member rate on premium-venue surcharges',
       'In-bundle venues included',
       'Cancel after 3 months',
     ],
@@ -74,6 +78,30 @@ const SUBSCRIPTION_PLANS: Plan[] = [
 ];
 
 const VISITOR_PASSES: Plan[] = [
+  {
+    id: 'pass-day-gym',
+    name: 'Gym Day Pass',
+    subtitle: 'One day, one visit',
+    features: ['1 visit', 'Valid same day', 'Any gym or fitness club'],
+    isPopular: false,
+    isSubscription: false,
+  },
+  {
+    id: 'pass-day-studio',
+    name: 'Studio Day Pass',
+    subtitle: 'One day, one visit',
+    features: ['1 visit', 'Valid same day', 'Boutique studios: yoga, Pilates & more'],
+    isPopular: false,
+    isSubscription: false,
+  },
+  {
+    id: 'pass-day-pool',
+    name: 'Pool Day Pass',
+    subtitle: 'One day, one visit',
+    features: ['1 visit', 'Valid same day', 'Public swimming pools'],
+    isPopular: false,
+    isSubscription: false,
+  },
   {
     id: 'pass-explorer',
     name: 'Explorer',
@@ -108,6 +136,8 @@ export default function TopUpScreen() {
   const navigation = useNavigation<any>();
   const [tab, setTab] = useState<0 | 1>(0); // 0 = Monthly plans, 1 = Visitor passes
   const [selectedId, setSelectedId] = useState<string>('plan-plus');
+  const [checkingOut, setCheckingOut] = useState(false);
+  const [kenniOpen, setKenniOpen] = useState(false);
 
   const plans = tab === 0 ? SUBSCRIPTION_PLANS : VISITOR_PASSES;
   const selectedPlan = plans.find((p) => p.id === selectedId) ?? plans[0];
@@ -120,22 +150,48 @@ export default function TopUpScreen() {
     setSelectedId(popular.id);
   }
 
+  // Mirrors iOS PlansView.handlePurchase: monthly plans require a verified
+  // kennitala first (the Kenni sheet proceeds to checkout via onVerified);
+  // passes are ungated and go straight to Kling.
   function handleContinue() {
-    Alert.alert(
-      `Continue with ${selectedPlan.name}`,
-      'The price is shown securely at checkout.\n\nCheckout will open in your browser.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Continue',
-          onPress: () =>
-            Alert.alert(
-              'Coming soon',
-              'Online checkout will be available in the next update.',
-            ),
-        },
-      ],
-    );
+    if (checkingOut || kenniOpen) return;
+    if (selectedPlan.isSubscription) {
+      setKenniOpen(true);
+      return;
+    }
+    doCheckout();
+  }
+
+  async function doCheckout() {
+    if (checkingOut) return;
+    setCheckingOut(true);
+    try {
+      // Opens Kling's hosted checkout in a Custom Tab; resolves on return.
+      const outcome = await startCheckout(selectedPlan.id);
+      const noun = selectedPlan.isSubscription ? 'plan' : 'pass';
+      if (outcome === 'fulfilled') {
+        Alert.alert("You're all set", `Your ${selectedPlan.name} ${noun} is now active.`, [
+          { text: 'Done', onPress: () => navigation.goBack() },
+        ]);
+      } else if (outcome === 'pending') {
+        Alert.alert(
+          'Almost there',
+          'Your payment is processing. It may take a moment to activate; pull to refresh your plan shortly.',
+        );
+      }
+      // 'canceled' → the user backed out; stay on the screen silently.
+    } catch (e: any) {
+      console.error('[checkout] failed', { status: e?.status, code: e?.code, message: e?.message });
+      if (e?.code === 'kennitala_verification_required') {
+        // Safety net — the Kenni gate should have handled this; re-prompt.
+        setKenniOpen(true);
+      } else {
+        const detail = e?.status ? ` [${e.status}${e.code ? ' ' + e.code : ''}]` : '';
+        Alert.alert('Checkout failed', `${e?.message ?? 'Could not start checkout.'}${detail}`);
+      }
+    } finally {
+      setCheckingOut(false);
+    }
   }
 
   return (
@@ -209,10 +265,20 @@ export default function TopUpScreen() {
       <View style={[styles.cta, { bottom: tabBarHeight + 36 }]}>
         <PrimaryButton
           block={false}
-          title={`Continue with ${selectedPlan.name} →`}
+          title={checkingOut ? 'Opening checkout…' : `Continue with ${selectedPlan.name} →`}
           onPress={handleContinue}
+          loading={checkingOut}
         />
       </View>
+
+      <KenniVerificationModal
+        visible={kenniOpen}
+        onClose={() => setKenniOpen(false)}
+        onVerified={() => {
+          setKenniOpen(false);
+          doCheckout();
+        }}
+      />
     </View>
   );
 }
