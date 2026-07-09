@@ -79,29 +79,43 @@ export async function signIn(email: string, password: string) {
   return data.session;
 }
 
+/**
+ * Create a new account, mirroring the iOS AuthService + the website. There is
+ * no signup API endpoint: Supabase owns Auth, and the `profiles` row is
+ * provisioned SERVER-SIDE from this user metadata on the first authenticated
+ * LifePass API call. The client performs NO app-table writes.
+ *
+ * Metadata shape matches iOS exactly: `full_name`, `marketing_opt_in`,
+ * `signup_source` ("auth" — Android has no plan-context signup entry point),
+ * and `nationality` only when present (omitted, never sent as an empty
+ * string, exactly like the web form). Kennitala is NOT a signup field — it is
+ * verified later through the Kenni flow and is server-owned.
+ */
 export async function signUp(
   email: string,
   password: string,
   fullName: string,
-  kennitala?: string,
+  nationality: string | undefined,
+  marketingOptIn: boolean,
 ) {
-  const { data, error } = await supabase.auth.signUp({
+  const data: Record<string, unknown> = {
+    full_name: fullName,
+    marketing_opt_in: marketingOptIn,
+    signup_source: 'auth',
+  };
+  if (nationality) data.nationality = nationality;
+
+  const { data: result, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      data: { full_name: fullName },
+      data,
       emailRedirectTo: AUTH_CALLBACK_URL,
     },
   });
   if (error) throw error;
 
-  // Write kennitala to profile row if supplied and session exists
-  // (no session = email confirmation required, will be retried post-verify)
-  if (kennitala?.trim() && data.session) {
-    await writeKennitala(kennitala.trim(), data.session.user.id);
-  }
-
-  return data;
+  return result;
 }
 
 export async function signOut() {
@@ -126,12 +140,4 @@ export async function resetPassword(email: string) {
     redirectTo: AUTH_CALLBACK_URL,
   });
   if (error) throw error;
-}
-
-/** Write unverified kennitala to the profile row. */
-async function writeKennitala(kennitala: string, userId: string) {
-  await supabase
-    .from('profiles')
-    .update({ kennitala })
-    .eq('user_id', userId);
 }
