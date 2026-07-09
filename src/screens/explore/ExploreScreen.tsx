@@ -20,7 +20,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExploreStackParamList } from '../../navigation/types';
 import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
-import { useSubscription } from '../../supabase/hooks/useSubscription';
 import {
   categoryFilters,
   matchesCategory,
@@ -31,7 +30,6 @@ import {
   PILATES_YOGA_GROUP_IDS,
   ALL_GROUP_IDS,
 } from '../../data/categories';
-import CreditPill from '../../components/CreditPill';
 import PricePill from '../../components/PricePill';
 import Kicker from '../../components/Kicker';
 import Wordmark from '../../components/Wordmark';
@@ -86,7 +84,6 @@ export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<Nav>();
   const { venues, loading } = useVenues();
-  const { credits } = useSubscription();
 
   const [search, setSearch] = useState('');
   const [planFilter, setPlanFilter] = useState<PlanFilter>('all');
@@ -157,7 +154,8 @@ export default function ExploreScreen() {
           <Kicker text="Explore" color={colors.paper2} />
           <Kicker text={`${filtered.length} venues`} color={colors.paper3} />
         </View>
-        <CreditPill credits={credits} />
+        {/* Spacer keeps the centered label balanced now the credit pill is gone. */}
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Search + toggle */}
