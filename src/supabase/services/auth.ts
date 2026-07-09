@@ -14,6 +14,15 @@ WebBrowser.maybeCompleteAuthSession();
 
 export const AUTH_CALLBACK_URL = 'lifepass://auth/callback';
 
+// Where Supabase sends the browser AFTER the email-confirmation link is tapped.
+// We deliberately use an https lifepass.is page, NOT the lifepass:// scheme:
+// Android's browser refuses to follow a redirect into a custom scheme, so the
+// scheme lands on about:blank (looks like the confirmation failed). An https
+// page always renders, so the user gets a real "you're on the site" moment;
+// the email is confirmed server-side by then, and they return to the app and
+// sign in. (iOS handles the scheme fine, but this repo is Android-only.)
+export const EMAIL_CONFIRM_REDIRECT = 'https://www.lifepass.is';
+
 // Where the OAuth browser redirect lands: `exp://<ip>:8081/--/auth/callback`
 // in Expo Go dev, `lifepass://auth/callback` in real builds (scheme in
 // app.json). Both patterns must be allowlisted in Supabase → Auth →
@@ -110,7 +119,8 @@ export async function signUp(
     password,
     options: {
       data,
-      emailRedirectTo: AUTH_CALLBACK_URL,
+      // https page, not the lifepass:// scheme — see EMAIL_CONFIRM_REDIRECT.
+      emailRedirectTo: EMAIL_CONFIRM_REDIRECT,
     },
   });
   if (error) throw error;

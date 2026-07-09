@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
-import { signUp } from '../../supabase/services/auth';
+import { signUp, signIn } from '../../supabase/services/auth';
 import AuthField from '../../components/AuthField';
 import PrimaryButton from '../../components/PrimaryButton';
 import {
@@ -40,6 +40,8 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
 
   // Mirror the web/iOS signup: prefill nationality from the email TLD until
   // the user picks one. Generic TLDs (gmail.com, …) leave it blank.
@@ -83,6 +85,27 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
     }
   }
 
+  // Tapping the email link confirms the account server-side and lands the
+  // browser on lifepass.is (not the app — Android can't deep-link back). So
+  // once the user has tapped it, they come back here and this signs them in
+  // with the credentials they just entered — no retyping.
+  async function handleConfirmedSignIn() {
+    setConfirmError(null);
+    setConfirming(true);
+    try {
+      await signIn(email.trim(), password);
+      // Session established → RootNavigator switches to the app automatically.
+    } catch (e: any) {
+      setConfirmError(
+        /email not confirmed/i.test(e?.message ?? '')
+          ? "Looks like the link hasn't been tapped yet. Open the confirmation link in your email first, then try again."
+          : friendlySignUpError(e?.message ?? 'Could not sign in. Please try again.'),
+      );
+    } finally {
+      setConfirming(false);
+    }
+  }
+
   // ── Email confirmation pending state ──────────────────────────────────────
   if (emailSent) {
     return (
@@ -92,11 +115,22 @@ export default function SignUpScreen({ navigation }: AuthStackScreenProps<'SignU
         <Text style={styles.confirmBody}>
           We sent a confirmation link to{'\n'}
           <Text style={{ color: colors.paper }}>{email}</Text>.{'\n\n'}
-          Tap the link in your inbox to activate your account, then come back and sign in.
+          Tap it to confirm — it opens lifepass.is in your browser. Then come
+          back here and tap the button below.
         </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.confirmCta}>
-          <Text style={styles.confirmCtaText}>Back to sign in</Text>
-        </TouchableOpacity>
+
+        {confirmError && <Text style={styles.confirmErrorText}>{confirmError}</Text>}
+
+        <View style={styles.confirmActions}>
+          <PrimaryButton
+            title={confirming ? 'Signing in…' : "I've confirmed — sign me in"}
+            onPress={handleConfirmedSignIn}
+            loading={confirming}
+          />
+          <TouchableOpacity onPress={() => navigation.navigate('Login')} style={styles.confirmSecondary}>
+            <Text style={styles.confirmSecondaryText}>Back to sign in</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }
@@ -325,7 +359,8 @@ const styles = StyleSheet.create({
   confirmCenter: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
   confirmTitle: { fontSize: 24, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   confirmBody: { fontSize: 15, color: colors.paper3, textAlign: 'center', lineHeight: 22 },
-  confirmCta: { marginTop: 8, paddingVertical: 14, paddingHorizontal: 32,
-    backgroundColor: colors.blue, borderRadius: 14 },
-  confirmCtaText: { fontSize: 15, fontWeight: '600', color: '#fff' },
+  confirmErrorText: { fontSize: 13, color: colors.destructive, textAlign: 'center' },
+  confirmActions: { alignSelf: 'stretch', gap: 8, marginTop: 8 },
+  confirmSecondary: { alignItems: 'center', paddingVertical: 10 },
+  confirmSecondaryText: { fontSize: 14, color: colors.blueMid, fontWeight: '600' },
 });
