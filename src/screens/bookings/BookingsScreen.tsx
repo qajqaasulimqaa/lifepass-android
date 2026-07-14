@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation, useRoute, type RouteProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { colors } from '../../theme';
 import { useBookings } from '../../supabase/hooks/useBookings';
@@ -60,10 +60,20 @@ export default function BookingsScreen() {
 
   const { bookings: upcomingBookings, loading: loadingUp } = useBookings(true);
   const { bookings: pastBookings, loading: loadingPast } = useBookings(false);
-  const { savedVenues, savedVenueIds, loading: loadingFavs, toggle } = useFavouriteVenues();
+  const { savedVenues, savedVenueIds, loading: loadingFavs, toggle, refetch: refetchFavs } =
+    useFavouriteVenues();
   const { venues, loading: loadingVenues } = useVenues();
 
   const loading = loadingUp || loadingPast || loadingFavs;
+
+  // The hook loads favourites once on mount, but this screen stays mounted in
+  // the tab navigator — so a venue saved from VenueDetail (a separate hook
+  // instance) never showed up here. Refetch whenever the screen regains focus.
+  useFocusEffect(
+    useCallback(() => {
+      refetchFavs();
+    }, [refetchFavs]),
+  );
 
   const suggestions = useMemo(
     () => venues.filter((v) => !savedVenueIds.includes(v.id)).slice(0, 3),

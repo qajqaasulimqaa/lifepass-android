@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Venue as AppVenue } from '../../types/venue';
 import {
   fetchFavouriteVenues,
@@ -19,14 +19,21 @@ export function useFavouriteVenues(): FavouritesState {
   const [savedVenues, setSavedVenues] = useState<AppVenue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const hasLoaded = useRef(false);
 
   const load = useCallback(() => {
-    setLoading(true);
+    // Only the first load shows the spinner. Focus-triggered refetches
+    // refresh in place so tabbing back into the screen doesn't flash a
+    // full-screen loader over the list that's already there.
+    if (!hasLoaded.current) setLoading(true);
     setError(null);
     fetchFavouriteVenues()
       .then(setSavedVenues)
       .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+      .finally(() => {
+        hasLoaded.current = true;
+        setLoading(false);
+      });
   }, []);
 
   useEffect(() => { load(); }, [load]);
