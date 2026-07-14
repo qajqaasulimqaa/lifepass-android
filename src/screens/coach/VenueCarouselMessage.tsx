@@ -37,7 +37,13 @@ type CardProps = {
 
 function VenueCardItem({ venue, width, onOtherIdeas, onBook }: CardProps) {
   return (
-    <View style={[card.container, { width }]}>
+    <TouchableOpacity
+      style={[card.container, { width }]}
+      onPress={onBook}
+      activeOpacity={0.9}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${venue.name}`}
+    >
       {/* Photo */}
       <View style={[card.imageWrap, { height: IMG_H }]}>
         <Image source={{ uri: venue.imageUrl }} style={card.image} resizeMode="cover" />
@@ -85,7 +91,7 @@ function VenueCardItem({ venue, width, onOtherIdeas, onBook }: CardProps) {
           </TouchableOpacity>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
