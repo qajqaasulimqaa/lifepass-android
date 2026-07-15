@@ -24,6 +24,7 @@ import {
 } from '../../supabase/services/bookings';
 import { PAYMENT_SUCCESS_URL } from '../../supabase/services/payments';
 import { ApiError, type ChargeOffer } from '../../api/client';
+import { gateRefusalFor } from '../../api/gateRefusal';
 import PrimaryButton from '../../components/PrimaryButton';
 import Kicker from '../../components/Kicker';
 import { scheduleBookingReminders } from '../../services/notifications';
@@ -167,8 +168,24 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
         // also saves the card), then the booking completes with those funds.
         await startPayAndSaveCard(offer);
       } else {
-        const message = e instanceof Error ? e.message : 'Could not create booking. Try again.';
-        Alert.alert('Booking failed', message);
+        // Booking-gate refusals (no plan, boutique membership, caps, dup slot)
+        // get friendly copy + a "View plans" CTA instead of the raw code.
+        const refusal = e instanceof ApiError ? gateRefusalFor(e.code) : null;
+        if (refusal) {
+          Alert.alert(
+            refusal.title,
+            refusal.message,
+            refusal.needsMembership
+              ? [
+                  { text: 'Not now', style: 'cancel' },
+                  { text: 'View plans', onPress: () => navigation.navigate('TopUp') },
+                ]
+              : [{ text: 'OK' }],
+          );
+        } else {
+          const message = e instanceof Error ? e.message : 'Could not create booking. Try again.';
+          Alert.alert('Booking failed', message);
+        }
       }
     } finally {
       setConfirming(false);
