@@ -15,10 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
-import {
-  hasLuxuryAccess,
-  planDisplayName,
-} from '../../supabase/types/subscription';
+import { planDisplayName } from '../../supabase/types/subscription';
 import Kicker from '../../components/Kicker';
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
@@ -35,20 +32,13 @@ export default function AccountScreen() {
   const initial = displayName.charAt(0).toUpperCase();
 
   const planName = subscription ? planDisplayName(subscription) : null;
-  const luxuryAccess = subscription ? hasLuxuryAccess(subscription) : false;
 
-  const daysLeft = subscription?.expires_at
-    ? Math.max(
-        0,
-        Math.round(
-          (new Date(subscription.expires_at).getTime() - Date.now()) /
-            (24 * 60 * 60 * 1000),
-        ),
-      )
-    : null;
-
-  const renewalLabel = subscription?.expires_at
-    ? `Renews ${new Date(subscription.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+  // Current period end drives the "Renews/Ends on" line. When the plan is set
+  // to cancel at period end it winds down rather than renews.
+  const periodEndLabel = subscription
+    ? `${subscription.cancelAtPeriodEnd ? 'Ends' : 'Renews'} ${new Date(
+        subscription.currentPeriodEndsAt,
+      ).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : null;
 
   function handleSignOut() {
@@ -145,16 +135,13 @@ export default function AccountScreen() {
                     text={planName ? `Plan · ${planName}` : 'No active plan'}
                     color={colors.paper2}
                   />
-                  {renewalLabel && (
-                    <Text style={memberCard.renewal}>{renewalLabel}</Text>
+                  {periodEndLabel && (
+                    <Text style={memberCard.renewal}>{periodEndLabel}</Text>
                   )}
-                  {luxuryAccess && subscription?.luxury_visit_cap != null && (
+                  {subscription?.status === 'past_due' && (
                     <View style={memberCard.luxuryChip}>
-                      <Ionicons name="sparkles" size={10} color={colors.skyBlue} />
-                      <Text style={memberCard.luxuryChipText}>
-                        {subscription.luxury_visits_used ?? 0}/
-                        {subscription.luxury_visit_cap} luxury this month
-                      </Text>
+                      <Ionicons name="alert-circle" size={10} color={colors.skyBlue} />
+                      <Text style={memberCard.luxuryChipText}>Payment due — access paused</Text>
                     </View>
                   )}
                 </View>
