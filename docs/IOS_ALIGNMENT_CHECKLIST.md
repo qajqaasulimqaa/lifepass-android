@@ -33,17 +33,17 @@ move to the API.
 
 ## 🟠 P2 — Booking / check-in parity gaps
 
-- [ ] **Pay-and-save-card for WALK-INS.** The rail is done for bookings only
-  (`kind: 'booking'`). A no-saved-card surcharge **walk-in** dead-ends with an
-  "add a card" alert. Extend to `kind: 'walk_in'` (same `/bookings/payment-
-  sessions` endpoint with `venueId`, no `startsAt/endsAt`).
+- [x] **Pay-and-save-card for WALK-INS.** ✅ Done. `kind: 'walk_in'` session
+  (`createWalkInPaymentSession`) wired into CheckInScreen: no-card surcharge
+  walk-ins now open the Kling hosted page and complete on confirm, with the
+  same outcomes as the booking rail (venue name resolved via fetchVenueById).
 - [ ] **Abler CLASSES in the booking flow.** Only slot providers are handled;
   class-based (Abler) venues show "No times available." Add `GET /activities/
-  {id}/classes` + a class-list step (iOS `classList` / `usesClasses`).
-- [ ] **Gate-refusal copy.** iOS maps DomainError codes (`no_active_plan_or_
-  pass`, `boutique_requires_membership`, `daily_use_cap_reached`,
-  `venue_already_booked_today`, `slot_already_booked`, `concurrent_cap_reached`)
-  to friendly copy + a "View plans" CTA. Android shows the raw server message.
+  {id}/classes` + a class-list step (iOS `classList` / `usesClasses`). NOTE:
+  requires the provider info from the walk-in preview (P1#3) to know which
+  venues are class-based.
+- [x] **Gate-refusal copy.** ✅ Done. `gateRefusalFor()` maps the DomainError
+  codes to friendly copy + a "View plans" CTA (booking + check-in).
 - [ ] **Booking-preview disclosure (optional).** iOS discloses the charge on the
   Confirm step via `GET /activities/{id}/booking-preview`; Android relies on the
   402 alert. Works today; disclosure-before-confirm is nicer.

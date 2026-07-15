@@ -7,8 +7,15 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
 import * as Crypto from 'expo-crypto';
+import * as WebBrowser from 'expo-web-browser';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { walkInCheckIn, CheckInError } from '../../supabase/services/checkin';
+import {
+  createWalkInPaymentSession,
+  confirmBookingPaymentSession,
+} from '../../supabase/services/bookings';
+import { fetchVenueById } from '../../supabase/services/venues';
+import { PAYMENT_SUCCESS_URL } from '../../supabase/services/payments';
 import { ApiError, type ChargeOffer } from '../../api/client';
 import { gateRefusalFor } from '../../api/gateRefusal';
 import { venueIdFromScan } from '../../checkin/walkInQrParser';
@@ -98,13 +105,10 @@ export default function CheckInScreen() {
         ]);
         return;
       }
-      if (e instanceof ApiError && e.code === 'no_payment_method_on_file') {
-        scannedRef.current = false;
-        setMode('idle');
-        Alert.alert(
-          'Payment needed',
-          'This venue charges for walk-ins and you have no saved card yet. Add one at lifepass.is/profile, then scan again.',
-        );
+      if (e instanceof ApiError && e.code === 'no_payment_method_on_file' && offer) {
+        // No vaulted card — pay the surcharge on Kling's hosted page (which
+        // also saves the card), then the walk-in completes with those funds.
+        await startWalkInPayAndSaveCard(venueId, offer);
         return;
       }
       // Reset to idle so the user can try again, then surface the error.
@@ -138,6 +142,98 @@ export default function CheckInScreen() {
         : 'Check-in failed.';
       Alert.alert('Check-in failed', message);
     }
+  }
+
+  // Pay-and-save-card rail for a no-saved-card surcharge walk-in. Creates the
+  // amount-only Kling session (SAME idempotency key as the walk-in), opens the
+  // hosted page, then confirms on return. Mirrors the booking rail.
+  async function startWalkInPayAndSaveCard(venueId: string, offer: ChargeOffer) {
+    const key = checkInKey.current ?? Crypto.randomUUID();
+    checkInKey.current = key;
+    try {
+      const session = await createWalkInPaymentSession(
+        { venueId, acceptedChargeAmountIsk: offer.amountIsk },
+        key,
+      );
+      if (session.hasCard) {
+        // A card exists now — check in directly with consent (reuses the key).
+        await runCheckIn(venueId, offer);
+        return;
+      }
+      const web = await WebBrowser.openAuthSessionAsync(session.url, PAYMENT_SUCCESS_URL);
+      const cancelLeg =
+        web.type !== 'success' || !web.url || web.url.includes('payment-canceled');
+      await settleWalkInPayment(venueId, key, cancelLeg);
+    } catch (e) {
+      scannedRef.current = false;
+      setMode('idle');
+      if (e instanceof ApiError && e.status === 402 && e.offer) {
+        const off = e.offer;
+        const price = `${off.amountIsk.toLocaleString('is-IS')} kr`;
+        Alert.alert('Price updated', `The price is now ${price}. Continue?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: `Pay ${price}`, onPress: () => void runCheckIn(venueId, off) },
+        ]);
+      } else {
+        Alert.alert('Payment failed', e instanceof Error ? e.message : 'Payment could not be started.');
+      }
+    }
+  }
+
+  // Verify the walk-in payment: the confirm vaults the card and records the
+  // check-in. Success leg polls (capture can lag the redirect); cancel leg
+  // checks once. Idempotent, so "Check again" is safe.
+  async function settleWalkInPayment(venueId: string, key: string, cancelLeg: boolean) {
+    const maxAttempts = cancelLeg ? 1 : 5;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 2500));
+      let conf;
+      try {
+        conf = await confirmBookingPaymentSession(key);
+      } catch {
+        continue; // transient — keep trying within the attempt budget
+      }
+      if (conf.status === 'fulfilled') {
+        checkInKey.current = null;
+        // Confirm carries no venue name — resolve it for the success screen.
+        const venue = await fetchVenueById(venueId).catch(() => null);
+        setScannedVenueName(venue?.name ?? 'Venue');
+        setReceipt(dateReceipt(new Date()));
+        setMode('success');
+        refetchSubscription();
+        return;
+      }
+      if (conf.status === 'processing') {
+        if (attempt < maxAttempts - 1) continue; // keep polling, stay in processing
+        scannedRef.current = false;
+        setMode('idle');
+        Alert.alert('Still processing', 'Your payment is still processing.', [
+          { text: 'Later', style: 'cancel' },
+          { text: 'Check again', onPress: () => void settleWalkInPayment(venueId, key, false) },
+        ]);
+        return;
+      }
+      // Terminal non-success outcomes.
+      scannedRef.current = false;
+      setMode('idle');
+      if (conf.status === 'refunded') {
+        Alert.alert('Payment refunded', 'You were refunded in full. Please try again.');
+      } else if (conf.status === 'expired') {
+        Alert.alert('Payment expired', 'The payment window expired and you were not charged. Please try again.');
+      } else {
+        Alert.alert(
+          'Payment received',
+          "We're finalizing your check-in. If it doesn't complete shortly, contact support@lifepass.is.",
+        );
+      }
+      return;
+    }
+    scannedRef.current = false;
+    setMode('idle');
+    Alert.alert("Couldn't confirm payment", 'Please check your connection and try again.', [
+      { text: 'Later', style: 'cancel' },
+      { text: 'Check again', onPress: () => void settleWalkInPayment(venueId, key, false) },
+    ]);
   }
 
   function handleBarcode(result?: { data?: string }) {

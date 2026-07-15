@@ -189,21 +189,14 @@ export type BookingPaySession =
   | { hasCard: true }
   | { hasCard: false; url: string; externalSessionId: string; amountIsk: number };
 
-export async function createBookingPaymentSession(
-  input: { activityId: string; startsAt: string; endsAt: string; acceptedChargeAmountIsk: number },
+async function createPaymentSession(
+  body: Record<string, unknown>,
   idempotencyKey: string,
+  fallbackAmount: number,
 ): Promise<BookingPaySession> {
-  const res = await apiPost<CreateSessionResponse>(
-    '/bookings/payment-sessions',
-    {
-      kind: 'booking',
-      activityId: input.activityId,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
-    },
-    { idempotencyKey },
-  );
+  const res = await apiPost<CreateSessionResponse>('/bookings/payment-sessions', body, {
+    idempotencyKey,
+  });
   if (res.hasCard) return { hasCard: true };
   if (!res.url || !res.externalSessionId) {
     // Contract violation (hasCard:false with no url) — retryable, not a no-op.
@@ -213,8 +206,44 @@ export async function createBookingPaymentSession(
     hasCard: false,
     url: res.url,
     externalSessionId: res.externalSessionId,
-    amountIsk: res.amountIsk ?? input.acceptedChargeAmountIsk,
+    amountIsk: res.amountIsk ?? fallbackAmount,
   };
+}
+
+export async function createBookingPaymentSession(
+  input: { activityId: string; startsAt: string; endsAt: string; acceptedChargeAmountIsk: number },
+  idempotencyKey: string,
+): Promise<BookingPaySession> {
+  return createPaymentSession(
+    {
+      kind: 'booking',
+      activityId: input.activityId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
+    },
+    idempotencyKey,
+    input.acceptedChargeAmountIsk,
+  );
+}
+
+// Walk-in variant: `venueId` is required, no start/end window, `activityId` is
+// null for a venue-level walk-in. Same `/bookings/payment-sessions` endpoint
+// with `kind: 'walk_in'` (server schema requires activityId to be present).
+export async function createWalkInPaymentSession(
+  input: { venueId: string; activityId?: string | null; acceptedChargeAmountIsk: number },
+  idempotencyKey: string,
+): Promise<BookingPaySession> {
+  return createPaymentSession(
+    {
+      kind: 'walk_in',
+      activityId: input.activityId ?? null,
+      venueId: input.venueId,
+      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
+    },
+    idempotencyKey,
+    input.acceptedChargeAmountIsk,
+  );
 }
 
 export type BookingPayStatus =
