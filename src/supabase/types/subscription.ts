@@ -1,75 +1,39 @@
 /**
- * Mirrors the iOS Subscription model exactly.
+ * Active subscription as returned by `GET /subscriptions` (or `null` when
+ * none). API v1 shape — mirrors iOS Models/Subscription.swift.
  *
- * Credit balance: always sum remaining_basic_credits + remaining_luxury_credits.
- * The top-level remaining_credits column is NOT consistently maintained by all
- * server code paths — same warning as in SubscriptionService.swift.
+ * Credits and luxury were removed entirely in v1; entitlements (tier caps +
+ * active passes) live on the profile `usage` block, NOT here. This model only
+ * describes the recurring-plan lifecycle: which product, status, current
+ * billing period, and cancellation state.
  */
 export type Subscription = {
+  /** Subscription row uuid — referenced by POST /subscriptions/cancel. */
   id: string;
-  user_id: string;
-  plan: string;
-  mode: string | null;
-  status: string;
-  tier: string | null;
-
-  // Credit buckets — source of truth for balance
-  remaining_basic_credits: number | null;
-  remaining_luxury_credits: number | null;
-  remaining_credits: number | null;   // stale — do not use as balance
-  credits_granted: number | null;
-
-  // Luxury visit tracking
-  luxury_visits_used: number | null;
-  luxury_visit_cap: number | null;    // null = no luxury access (S/M) or uncapped (tourist)
-
-  // Period & expiry
-  current_period_start: string | null;
-  current_period_end: string | null;
-  expires_at: string | null;
-  commitment_months: number | null;
-  commitment_end_date: string | null;
-  cancel_at_period_end: boolean | null;
-  package_kind: string | null;
-  provider: string | null;
-
-  // Company benefit layer
-  company_credits_granted_total: number | null;
-  company_remaining_basic_credits: number | null;
-  company_remaining_luxury_credits: number | null;
-  company_credits_last_granted_month: string | null;
+  productSlug: string;
+  productName: string;
+  status: 'active' | 'past_due' | string;
+  currentPeriodStartsAt: string; // ISO
+  currentPeriodEndsAt: string; // ISO
+  cancelAtPeriodEnd: boolean;
+  cancelledAt: string | null; // ISO
 };
 
-// ─── Derived helpers (mirrors Swift computed vars) ────────────────────────────
+// ─── Derived helpers (mirror the Swift computed vars) ─────────────────────────
 
-export function totalCredits(sub: Subscription): number {
-  return (sub.remaining_basic_credits ?? 0) + (sub.remaining_luxury_credits ?? 0);
+export function isActive(sub: Subscription): boolean {
+  return sub.status === 'active' || sub.status === 'past_due';
 }
 
-export function isTouristPackage(sub: Subscription): boolean {
-  if (sub.mode === 'one_time') return true;
-  if (sub.package_kind === 'tourist') return true;
-  return ['starter', 'explorer', 'wellness', 'ultimate'].includes(sub.plan);
+/** Dunning: the monthly charge failed; access is suspended until cured. */
+export function isPastDue(sub: Subscription): boolean {
+  return sub.status === 'past_due';
 }
 
-export function hasLuxuryAccess(sub: Subscription): boolean {
-  if (isTouristPackage(sub)) return true;
-  if (sub.luxury_visit_cap != null) return true;
-  const letter = tierLetter(sub);
-  return letter != null && ['L', 'XL'].includes(letter);
-}
-
-export function tierLetter(sub: Subscription): string | null {
-  if (sub.tier) return sub.tier.toUpperCase();
-  const map: Record<string, string> = {
-    'plan-s': 'S', 'plan-m': 'M', 'plan-l': 'L', 'plan-xl': 'XL',
-  };
-  return map[sub.plan] ?? null;
-}
-
+/** Marketing display name — prefer the API's productName, else a slug label. */
 export function planDisplayName(sub: Subscription): string {
+  if (sub.productName) return sub.productName;
   const map: Record<string, string> = {
-    // v1 product slugs (same labels as iOS Subscription.swift)
     'plan-base': 'LifePass Base',
     'plan-base-annual': 'LifePass Base',
     'plan-plus': 'LifePass Plus',
@@ -79,23 +43,6 @@ export function planDisplayName(sub: Subscription): string {
     'pass-explorer': 'Explorer',
     'pass-adventurer': 'Adventurer',
     'pass-local': 'Local',
-    // legacy slugs — still in old subscription rows
-    starter: 'LayOver',
-    explorer: 'Week Warrior',
-    wellness: 'Extended Stay',
-    ultimate: 'Becoming a Local',
-    'plan-s': 'Plan S',
-    'plan-m': 'Plan M',
-    'plan-l': 'Plan L',
-    'plan-xl': 'Plan XL',
   };
-  return map[sub.plan] ?? sub.plan;
-}
-
-export function hasCompanyBenefit(sub: Subscription): boolean {
-  return (
-    (sub.company_credits_granted_total ?? 0) > 0 ||
-    (sub.company_remaining_basic_credits ?? 0) > 0 ||
-    (sub.company_remaining_luxury_credits ?? 0) > 0
-  );
+  return map[sub.productSlug] ?? sub.productSlug;
 }

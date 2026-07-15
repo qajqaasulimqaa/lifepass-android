@@ -10,6 +10,7 @@ import * as Crypto from 'expo-crypto';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { walkInCheckIn, CheckInError } from '../../supabase/services/checkin';
 import { ApiError, type ChargeOffer } from '../../api/client';
+import { gateRefusalFor } from '../../api/gateRefusal';
 import { venueIdFromScan } from '../../checkin/walkInQrParser';
 import type { CheckInStackParamList } from '../../navigation/types';
 import BrandedTopBar from '../../components/BrandedTopBar';
@@ -106,13 +107,35 @@ export default function CheckInScreen() {
         );
         return;
       }
+      // Reset to idle so the user can try again, then surface the error.
+      scannedRef.current = false;
+      setMode('idle');
+      // Gate refusals (no plan, boutique membership, caps) get friendly copy
+      // + a "View plans" CTA instead of the raw code.
+      const refusal = e instanceof ApiError ? gateRefusalFor(e.code) : null;
+      if (refusal) {
+        Alert.alert(
+          refusal.title,
+          refusal.message,
+          refusal.needsMembership
+            ? [
+                { text: 'Not now', style: 'cancel' },
+                {
+                  text: 'View plans',
+                  onPress: () =>
+                    (navigation.navigate as (name: string, params?: object) => void)('Home', {
+                      screen: 'TopUp',
+                    }),
+                },
+              ]
+            : [{ text: 'OK' }],
+        );
+        return;
+      }
       const message =
         e instanceof CheckInError ? e.message
         : e instanceof Error ? e.message
         : 'Check-in failed.';
-      // Reset to idle so the user can try again, then surface the error.
-      scannedRef.current = false;
-      setMode('idle');
       Alert.alert('Check-in failed', message);
     }
   }

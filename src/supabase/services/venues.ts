@@ -1,13 +1,13 @@
 import { supabase } from '../lib/client';
 import { apiGet } from '../../api/client';
-import type { Venue as DbVenue, Activity as DbActivity, VenueReview as DbVenueReview, DayHours, OpeningHours as DbOpeningHours } from '../types/venue';
-import type { Venue, Activity, OpeningHours, OpeningHoursDay } from '../../types/venue';
+import type { Venue as DbVenue, Activity as DbActivity, DayHours, OpeningHours as DbOpeningHours } from '../types/venue';
+import type { Venue, Activity, VenueReview, OpeningHours, OpeningHoursDay } from '../../types/venue';
 
 // Venue reads go through the LifePass API (GET /venues), same as
 // lifepass-ios VenueService.swift — the API returns resolved image URLs
 // and caller-resolved ISK pricing (inBundle / surchargePrice / …).
-// Activities and reviews still read Supabase directly; they migrate to
-// the API together with the booking flow.
+// Reviews go through GET /venues/{id}/reviews. Activities still read the
+// (live) activities table directly — see fetchActivities.
 
 // ─── Storage ──────────────────────────────────────────────────────────────────
 
@@ -241,13 +241,28 @@ export async function fetchActivities(venueId: string): Promise<Activity[]> {
   return (data as DbActivity[]).map(adaptActivity);
 }
 
-export async function fetchVenueReviews(venueId: string) {
-  const { data, error } = await supabase
-    .from('venue_reviews')
-    .select('*')
-    .eq('venue_id', venueId)
-    .order('created_at', { ascending: false })
-    .limit(20);
-  if (error) throw error;
-  return data as DbVenueReview[];
+// `GET /venues/{venueId}/reviews` — reviews + aggregate summary (mirrors iOS
+// VenueService.fetchVenueReviews). Maps the API `rows` into the app VenueReview
+// the detail view consumes. Reviews are keyed by venue UUID (not slug).
+type ApiReviewsResponse = {
+  rows: {
+    id: string;
+    venueId: string;
+    rating: number;
+    comment?: string | null;
+    createdAt: string;
+    reviewer?: { fullNameInitial?: string; fullName?: string | null };
+  }[];
+  canWriteReview?: boolean;
+  ownReviewId?: string | null;
+};
+
+export async function fetchVenueReviews(venueId: string): Promise<VenueReview[]> {
+  const resp = await apiGet<ApiReviewsResponse>(`/venues/${venueId}/reviews`);
+  return resp.rows.map((r) => ({
+    id: r.id,
+    rating: r.rating,
+    comment: r.comment ?? '',
+    createdAt: new Date(r.createdAt),
+  }));
 }
