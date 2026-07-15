@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
-import type { Venue, Activity } from '../../types/venue';
-import { fetchVenues, fetchVenueById, fetchActivities } from '../services/venues';
+import type { Venue, Activity, VenueReview } from '../../types/venue';
+import { fetchVenues, fetchVenueById, fetchActivities, fetchVenueReviews } from '../services/venues';
 
 type VenuesState = {
   venues: Venue[];
@@ -71,4 +71,26 @@ export function useActivities(venueId: string): ActivitiesState {
   }, [venueId]);
 
   return { activities, loading, error };
+}
+
+type ReviewsState = {
+  reviews: VenueReview[];
+  loading: boolean;
+  error: string | null;
+};
+
+export function useVenueReviews(venueId: string): ReviewsState {
+  const [reviews, setReviews] = useState<VenueReview[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setLoading(true);
+    fetchVenueReviews(venueId)
+      .then(setReviews)
+      .catch((e) => setError(e.message))
+      .finally(() => setLoading(false));
+  }, [venueId]);
+
+  return { reviews, loading, error };
 }

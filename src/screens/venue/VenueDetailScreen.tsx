@@ -14,7 +14,7 @@ import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
-import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
+import { useVenueById, useActivities, useVenueReviews } from '../../supabase/hooks/useVenues';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import Kicker from '../../components/Kicker';
 import { isPremium, isBoutique, priceLabel } from '../../types/venue';
@@ -43,6 +43,7 @@ export default function VenueDetailScreen({ navigation, route }: Props) {
 
   const { venue, loading: venueLoading } = useVenueById(venueId);
   const { activities } = useActivities(venueId);
+  const { reviews } = useVenueReviews(venueId);
   const { savedVenueIds, toggle } = useFavouriteVenues();
 
   const isFavourite = venue ? savedVenueIds.includes(venue.id) : false;
@@ -100,7 +101,7 @@ export default function VenueDetailScreen({ navigation, route }: Props) {
           <ActivitiesBlock venue={venueWithActivities} onBook={openBooking} />
           <OpeningHoursBlock hours={venueWithActivities.openingHours} />
           <ContactBlock venue={venueWithActivities} />
-          <ReviewsBlock reviews={venueWithActivities.reviews} />
+          <ReviewsBlock reviews={reviews} />
         </View>
       </ScrollView>
 
