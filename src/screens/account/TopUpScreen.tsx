@@ -66,9 +66,9 @@ const SUBSCRIPTION_PLANS: Plan[] = [
     subtitle: 'Maximum access',
     features: [
       'The most monthly visits',
-      // Backend grants the member surcharge rate to Max + pass holders only
-      // (charges.ts memberPriced) — don't promise it on other tiers.
-      'Member rate on premium-venue surcharges',
+      // Premium ladder: the member rate is the out-of-visits / pass-holder
+      // price for EVERY tier now — no Max-only premium discount to promise.
+      'Premium venues at member prices when out of visits',
       'In-bundle venues included',
       'Cancel after 3 months',
     ],
