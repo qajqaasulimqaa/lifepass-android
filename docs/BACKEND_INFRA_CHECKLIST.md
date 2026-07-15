@@ -9,49 +9,67 @@ Status legend: ⛔ blocks a feature · ⚠️ degraded / workaround in place · 
 
 ---
 
-## ⛔ Kenni redirect URI not registered — blocks monthly-plan checkout
+## ✅ Kenni redirect URI registered — monthly-plan checkout unblocked
 
-**Symptom:** "Verify with Kenni.is" → Kenni returns `400 — redirect uri did not
-match any of the client's registered redirect uris`.
+**Resolved 2026-07-14 (confirmed working).** The redirect URI is now registered
+on the Kenni OIDC client, so "Verify with Kenni.is" completes and monthly-plan
+checkout is no longer blocked on this. The Android Kenni flow
+(`src/supabase/services/kenni.ts`, `KenniVerificationModal`) works end-to-end.
 
-**Cause:** the server sends `redirect_uri = lifepass://kenni-callback` (default
-of `getKenniNativeRedirectUri()`, override `KENNI_NATIVE_REDIRECT_URI`), and
-that URI is **not registered** in the Kenni OIDC client.
+**Was:** Kenni returned `400 — redirect uri did not match any of the client's
+registered redirect uris` because the server's `redirect_uri =
+lifepass://kenni-callback` (default of `getKenniNativeRedirectUri()`, override
+`KENNI_NATIVE_REDIRECT_URI`) wasn't registered on the client.
 
-**Fix (Kenni dashboard / backend):** register `lifepass://kenni-callback` as an
-allowed redirect URI on the LifePass Kenni client — *or* set
-`KENNI_NATIVE_REDIRECT_URI` on the web deployment to a value that already is,
-and tell mobile so the app's callback capture matches.
-
-**Notes:** iOS hits the identical error; iOS `MIGRATION_GAPS.md` lists Kenni as
-"Pinned — not directly consumable through the API yet." The Android Kenni flow
-(`src/supabase/services/kenni.ts`, `KenniVerificationModal`) is complete and
-will work the moment this is registered. Subscriptions stay blocked until then;
-**visitor passes don't need Kenni and work today.**
+**Watch:** if `KENNI_NATIVE_REDIRECT_URI` is ever changed on the web deployment,
+the registered URI must be updated to match (and mobile told, so the app's
+callback capture still matches).
 
 ---
 
-## ⚠️ Android App Links not enabled — email link can't reopen the app
+## ⚠️ Android App Links (venue-QR check-in) — app-side done, needs web fingerprint
 
-**Symptom:** the email-confirmation link redirected to `lifepass://auth/callback`
-and landed on `about:blank` on Android (browsers won't follow a server redirect
-into a custom scheme).
+**What App Links are for here:** per the product contract (monorepo
+`server/deep-links.ts`: *"Restrict OS hand-off to the printed venue QR only"*),
+only the printed venue QR `https://lifepass.is/scan?v=<uuid>` opens the app —
+matching iOS Universal Links. Login/email links are deliberately NOT App Links.
 
-**Workaround in place:** signup now redirects email confirmation to
-`https://www.lifepass.is` (real page, no blank), and the user returns to the app
-and signs in (`EMAIL_CONFIRM_REDIRECT` in `src/supabase/services/auth.ts`).
+**App-side — DONE (2026-07-14, this repo):**
+- `app.json` → `android.intentFilters`: `autoVerify` VIEW filter for
+  `https://lifepass.is` path `/scan`.
+- Deep-link handler in `App.tsx` routes `…/scan?v=<uuid>` into the Check-in tab
+  (`routeToCheckIn` + `navigationRef`), and `CheckInScreen` auto-runs the
+  walk-in from the `autoCheckInVenueId` param.
+- Shared `src/checkin/walkInQrParser.ts` (port of iOS `WalkInQRParser`) now
+  backs BOTH the in-app camera scanner and the deep link — so the scanner also
+  accepts the canonical `/scan?v=` poster form, not just a bare UUID.
 
-**Proper fix (web + app):**
-1. Web: set `ANDROID_PACKAGE_NAME=is.lifepass.android` and
-   `ANDROID_SHA256_CERT_FINGERPRINTS=<release signing SHA-256>` so
-   `/.well-known/assetlinks.json` serves (already coded, gated on these env
-   vars — see monorepo `docs/08_QR_CODE.md`). Get the fingerprint from
-   `eas credentials`.
-2. App: add an `autoVerify` intent filter for the `https://lifepass.is/...`
-   callback path in `app.json`, and point `emailRedirectTo` at that https path.
+**Remaining — web/deploy side (NOT this repo):**
+1. Serve `https://lifepass.is/.well-known/assetlinks.json` (Next route already
+   coded, gated on env): set `ANDROID_PACKAGE_NAME=is.lifepass.android` and
+   `ANDROID_SHA256_CERT_FINGERPRINTS=<release signing SHA-256>` on the web
+   deployment. It **must be served on the `lifepass.is` host with no redirect**
+   and `application/json` — mind the apex→www redirect.
+2. Get the release SHA-256: `eas credentials -p android` → copy the SHA256
+   Fingerprint (or Play Console → App signing).
+3. App Links only verify in a real build (EAS), not Expo Go, and after a
+   native rebuild picks up the new `intentFilters`.
 
-Once done, the confirmation link opens the app directly (like iOS Universal
-Links) and auto-login works.
+Until (1)+(2) land, the intent filter simply doesn't verify and the QR opens the
+browser fallback — no regression. The **in-app camera scanner works regardless.**
+
+---
+
+## ⚠️ Email-confirm link doesn't reopen the app (separate from App Links)
+
+**Not an App Link** (the product contract hands off only the venue QR, above),
+and iOS confirms via the `lifepass://` scheme, which Android browsers won't
+follow from a redirect (lands on `about:blank`).
+
+**Workaround in place & intended:** signup redirects email confirmation to
+`https://www.lifepass.is` (`EMAIL_CONFIRM_REDIRECT` in
+`src/supabase/services/auth.ts`); the user returns to the app and signs in. This
+stays as-is unless the product decides email links should hand off to the app.
 
 ---
 

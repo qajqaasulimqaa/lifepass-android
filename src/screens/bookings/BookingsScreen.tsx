@@ -269,9 +269,7 @@ function SavedTab({
                 <Image source={{ uri: a.imageUrl }} style={activityRowStyles.image} />
                 <View style={activityRowStyles.info}>
                   <Text style={activityRowStyles.name}>{a.name}</Text>
-                  <Text style={activityRowStyles.credits}>
-                    {a.creditCost} credit{a.creditCost === 1 ? '' : 's'}
-                  </Text>
+                  <Text style={activityRowStyles.credits}>{a.durationMinutes} min</Text>
                 </View>
                 <Ionicons name="heart" size={14} color={colors.blueMid} />
                 <Ionicons name="chevron-forward" size={12} color={colors.paper3} />

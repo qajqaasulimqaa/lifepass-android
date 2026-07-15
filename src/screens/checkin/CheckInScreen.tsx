@@ -1,12 +1,17 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Alert } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRoute, useNavigation, type RouteProp } from '@react-navigation/native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors } from '../../theme';
+import * as Crypto from 'expo-crypto';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
 import { walkInCheckIn, CheckInError } from '../../supabase/services/checkin';
+import { ApiError, type ChargeOffer } from '../../api/client';
+import { venueIdFromScan } from '../../checkin/walkInQrParser';
+import type { CheckInStackParamList } from '../../navigation/types';
 import BrandedTopBar from '../../components/BrandedTopBar';
 import PrimaryButton from '../../components/PrimaryButton';
 import Kicker from '../../components/Kicker';
@@ -27,13 +32,27 @@ export default function CheckInScreen() {
   const insets = useSafeAreaInsets();
   const [permission, requestPermission] = useCameraPermissions();
   const { refetch: refetchSubscription } = useSubscription();
+  const route = useRoute<RouteProp<CheckInStackParamList, 'CheckInMain'>>();
+  const navigation = useNavigation();
 
   const [mode, setMode] = useState<Mode>('idle');
   const [scannedVenueName, setScannedVenueName] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
-  const [remainingBalance, setRemainingBalance] = useState<number | null>(null);
-  const [isLuxuryVisit, setIsLuxuryVisit] = useState(false);
   const scannedRef = useRef(false);
+  // One idempotency key per check-in attempt, reused across the charge-consent
+  // re-POST so consenting can't double check-in.
+  const checkInKey = useRef<string | null>(null);
+
+  // A scanned venue-QR App Link routes here with the venue id parked as a
+  // param (App.tsx → routeToCheckIn). Run the walk-in straight away and
+  // consume the param so a repeat scan of the same venue re-triggers.
+  const autoVenueId = route.params?.autoCheckInVenueId;
+  useEffect(() => {
+    if (!autoVenueId) return;
+    navigation.setParams({ autoCheckInVenueId: undefined } as never);
+    runCheckIn(autoVenueId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoVenueId]);
 
   function handleStartScan() {
     if (!permission?.granted) {
@@ -44,20 +63,49 @@ export default function CheckInScreen() {
     setMode('scanning');
   }
 
-  async function handleBarcode(result?: { data?: string }) {
-    if (scannedRef.current) return;
+  // Run the check-in for a resolved venue id (from the camera scanner or a
+  // deep link) and drive the processing → success UI. A charge-bearing (à-la-
+  // carte) venue returns 402 charge_consent_required — disclose the price and
+  // re-run with consent via the `offer` argument.
+  async function runCheckIn(venueId: string, offer?: ChargeOffer) {
+    if (scannedRef.current && !offer) return; // camera repeat / re-entry
     scannedRef.current = true;
     setMode('processing');
-
     try {
-      const r = await walkInCheckIn(result?.data ?? '');
-      setScannedVenueName(r.venue.name);
-      setRemainingBalance(r.remainingBalance);
-      setIsLuxuryVisit(r.isLuxury);
+      // Fresh attempt gets a new key; the consent re-POST reuses it.
+      if (!offer) checkInKey.current = Crypto.randomUUID();
+      const key = checkInKey.current ?? Crypto.randomUUID();
+      checkInKey.current = key;
+      const r = await walkInCheckIn(venueId, {
+        idempotencyKey: key,
+        ...(offer ? { acceptCharge: true, acceptedChargeAmountIsk: offer.amountIsk } : {}),
+      });
+      checkInKey.current = null;
+      setScannedVenueName(r.venueName);
       setReceipt(dateReceipt(new Date()));
       setMode('success');
-      refetchSubscription();   // refresh global credits pill
+      refetchSubscription();   // refresh the global credits/plan pill
     } catch (e) {
+      if (e instanceof ApiError && e.status === 402 && e.offer) {
+        const off = e.offer;
+        const price = `${off.amountIsk.toLocaleString('is-IS')} kr`;
+        scannedRef.current = false;
+        setMode('idle');
+        Alert.alert('Payment required', `This venue costs ${price} per visit. Pay and check in?`, [
+          { text: 'Cancel', style: 'cancel' },
+          { text: `Pay ${price}`, onPress: () => void runCheckIn(venueId, off) },
+        ]);
+        return;
+      }
+      if (e instanceof ApiError && e.code === 'no_payment_method_on_file') {
+        scannedRef.current = false;
+        setMode('idle');
+        Alert.alert(
+          'Payment needed',
+          'This venue charges for walk-ins and you have no saved card yet. Add one at lifepass.is/profile, then scan again.',
+        );
+        return;
+      }
       const message =
         e instanceof CheckInError ? e.message
         : e instanceof Error ? e.message
@@ -69,12 +117,26 @@ export default function CheckInScreen() {
     }
   }
 
+  function handleBarcode(result?: { data?: string }) {
+    if (scannedRef.current) return;
+    // Accept exactly what the printed posters use — canonical /scan?v= URL,
+    // legacy JSON, or a bare UUID — via the shared parser (matches iOS).
+    const venueId = venueIdFromScan(result?.data ?? '');
+    if (!venueId) {
+      Alert.alert(
+        'Unrecognized code',
+        "That doesn't look like a LifePass venue code. Please scan the QR at the front desk.",
+      );
+      return; // stay in scanning mode so they can try again
+    }
+    runCheckIn(venueId);
+  }
+
   function reset() {
+    scannedRef.current = false; // allow a fresh scan / deep link after Done
     setMode('idle');
     setScannedVenueName(null);
     setReceipt(null);
-    setRemainingBalance(null);
-    setIsLuxuryVisit(false);
   }
 
   if (mode === 'scanning') {
@@ -131,14 +193,6 @@ export default function CheckInScreen() {
           <Text style={successStyles.title}>Checked in</Text>
           <Text style={successStyles.venue}>{scannedVenueName}</Text>
           {receipt && <Kicker text={receipt} color={colors.paper3} />}
-          {isLuxuryVisit && <Kicker text="Luxury visit" color={colors.skyBlue} />}
-          <View style={successStyles.divider} />
-          <View style={successStyles.creditsRow}>
-            <Text style={successStyles.creditsLabel}>Credits remaining</Text>
-            <Text style={successStyles.creditsValue}>
-              {remainingBalance ?? 0}
-            </Text>
-          </View>
           <View style={{ alignSelf: 'stretch', marginTop: 24 }}>
             <PrimaryButton title="Done" onPress={reset} />
           </View>
@@ -166,7 +220,7 @@ export default function CheckInScreen() {
           </View>
           <Text style={idleStyles.heroTitle}>Scan to check in</Text>
           <Text style={idleStyles.heroBody}>
-            Point your camera at the venue's QR code at the front desk to spend a credit and walk
+            Point your camera at the venue's QR code at the front desk to check in and walk
             straight in.
           </Text>
         </LinearGradient>

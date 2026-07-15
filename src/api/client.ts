@@ -13,11 +13,25 @@ import { supabase } from '../supabase/lib/client';
 const API_BASE =
   process.env.EXPO_PUBLIC_LIFEPASS_API_URL ?? 'https://www.lifepass.is/api/v1';
 
+/**
+ * The disclosed charge carried by a `402 charge_consent_required` problem.
+ * The caller confirms by re-POSTing the same request with `acceptCharge:true`
+ * and `acceptedChargeAmountIsk === amountIsk` (mirrors iOS ChargeConsentOffer).
+ */
+export type ChargeOffer = {
+  kind: string; // 'surcharge' | 'topup'
+  amountIsk: number;
+  lane?: string;
+  reason?: string;
+};
+
 export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
     public readonly code?: string,
+    /** Present on a 402 charge_consent_required — the charge to disclose. */
+    public readonly offer?: ChargeOffer,
   ) {
     super(message);
     this.name = 'ApiError';
@@ -85,7 +99,12 @@ async function request<T>(
     const code =
       (typeof envErr === 'object' ? envErr?.code : undefined) ??
       (typeof problem?.title === 'string' ? problem.title : undefined);
-    throw new ApiError(message, res.status, code);
+    // A 402 charge_consent_required carries the disclosed charge as `offer`.
+    const offer =
+      problem && typeof problem.offer === 'object' && problem.offer !== null
+        ? (problem.offer as ChargeOffer)
+        : undefined;
+    throw new ApiError(message, res.status, code, offer);
   }
 
   return body.data;

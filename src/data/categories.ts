@@ -32,6 +32,10 @@ export const categoryFilters: FilterCategory[] = [
   { id: 'grouptraining',  displayName: 'Group Training',   dbCategories: ['Group Training'] },
   { id: 'massage',        displayName: 'Massage',          dbCategories: ['Massage', 'Massage Therapy'] },
   { id: 'swimming',       displayName: 'Swimming',         dbCategories: ['Swimming'] },
+  // Boutique is the venue ACCESS category (primaryCategory === 'boutique'), not
+  // a display tag — Explore special-cases it via isBoutique(). Mirrors iOS
+  // CategoryMapping's 6th top-level "Boutique" chip (monorepo PR #82).
+  { id: 'boutique',       displayName: 'Boutique',         dbCategories: ['boutique', 'Boutique'] },
 ];
 
 /** IDs that belong to the "Gym & Fitness" expandable group. */
@@ -66,22 +70,4 @@ export function matchesCategory(venueCategories: string[], filterId: string): bo
   if (!filter) return false;
   const dbSet = new Set(filter.dbCategories.map((c) => c.toLowerCase()));
   return venueCategories.some((c) => dbSet.has(c.toLowerCase()));
-}
-
-// ─── Credit range filter ──────────────────────────────────────────────────────
-
-export type CreditRange = 'all' | '1-2' | '3-5' | '6+';
-
-export const CREDIT_FILTERS: { id: CreditRange; label: string }[] = [
-  { id: 'all',  label: 'All' },
-  { id: '1-2',  label: '1–2 cr' },
-  { id: '3-5',  label: '3–5 cr' },
-  { id: '6+',   label: '6+ cr' },
-];
-
-export function matchesCreditRange(creditCost: number, range: CreditRange): boolean {
-  if (range === 'all') return true;
-  if (range === '1-2') return creditCost >= 1 && creditCost <= 2;
-  if (range === '3-5') return creditCost >= 3 && creditCost <= 5;
-  return creditCost >= 6; // '6+'
 }

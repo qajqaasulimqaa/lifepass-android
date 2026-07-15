@@ -1,6 +1,7 @@
 import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
+import { priceLabel } from '../types/venue';
 import type { Venue } from '../types/venue';
 
 type Props = {
@@ -41,13 +42,13 @@ export default function PopularVenueRow({ venue, isFavourited, onBook, onToggleF
         {/* Subtitle */}
         <Text style={styles.subtitle} numberOfLines={2}>{subtitle}</Text>
 
-        {/* Bottom row: book + credits */}
+        {/* Bottom row: book + price */}
         <View style={styles.bottomRow}>
           <TouchableOpacity style={styles.bookBtn} onPress={onBook} activeOpacity={0.8}>
             <Text style={styles.bookBtnText}>Book</Text>
           </TouchableOpacity>
           <View style={styles.creditsPill}>
-            <Text style={styles.creditsText}>{venue.creditCost} credit{venue.creditCost !== 1 ? 's' : ''}</Text>
+            <Text style={styles.creditsText}>{priceLabel(venue)}</Text>
           </View>
         </View>
       </View>
