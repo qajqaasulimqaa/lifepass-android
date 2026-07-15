@@ -34,7 +34,7 @@ import PricePill from '../../components/PricePill';
 import Kicker from '../../components/Kicker';
 import Wordmark from '../../components/Wordmark';
 import type { Venue } from '../../types/venue';
-import { isPremium } from '../../types/venue';
+import { isPremium, isBoutique } from '../../types/venue';
 
 type Nav = NativeStackNavigationProp<ExploreStackParamList>;
 type Presentation = 'map' | 'list';
@@ -111,12 +111,17 @@ export default function ExploreScreen() {
   }
 
   // Client-side filtering — venues list is small enough
+  // Boutique is the venue access category (primaryCategory), not a display tag,
+  // so it can't go through matchesCategory — special-case it via isBoutique.
+  const catMatches = (v: Venue, filterId: string) =>
+    filterId === 'boutique' ? isBoutique(v) : matchesCategory(v.category, filterId);
+
   const filtered = useMemo(() => {
     return venues.filter((v) => {
       if (search && !v.name.toLowerCase().includes(search.toLowerCase())) return false;
       if (planFilter === 'inPlan' && !v.inBundle) return false;
       if (planFilter === 'premium' && !isPremium(v)) return false;
-      if (categoryFilter && !matchesCategory(v.category, categoryFilter)) return false;
+      if (categoryFilter && !catMatches(v, categoryFilter)) return false;
       return true;
     });
   }, [venues, search, planFilter, categoryFilter]);
@@ -137,7 +142,7 @@ export default function ExploreScreen() {
   }
 
   function categoryCount(filterId: string) {
-    return venues.filter((v) => matchesCategory(v.category, filterId)).length;
+    return venues.filter((v) => catMatches(v, filterId)).length;
   }
 
   const selectedVenue = selectedVenueId
@@ -711,8 +716,10 @@ const styles = StyleSheet.create({
     borderWidth: 0.5, borderColor: colors.line,
   },
   classChips: { flexDirection: 'row', gap: 6, paddingHorizontal: 20, paddingBottom: 4 },
-  categoryScroll: { height: 44, marginBottom: 4 },
-  categoryChips: { paddingHorizontal: 20, gap: 8, alignItems: 'flex-start' },
+  categoryScroll: { minHeight: 44, marginBottom: 4 },
+  // Center chips vertically and let the row grow with the chip height (a fixed
+  // height clipped taller chips — e.g. with a larger system font — in half).
+  categoryChips: { paddingHorizontal: 20, paddingVertical: 4, gap: 8, alignItems: 'center' },
   chip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 14, paddingVertical: 8,
@@ -724,7 +731,7 @@ const styles = StyleSheet.create({
   chipTextSelected: { color: colors.ink },
   chipCount: { fontSize: 11, color: colors.paper3, opacity: 0.8 },
   luxuryDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: colors.skyBlue },
-  gymSubRow: { height: 44, marginBottom: 4 },
+  gymSubRow: { minHeight: 44, marginBottom: 4 },
   chipSub: {},
   chipSubSelected: { backgroundColor: colors.blue, borderColor: colors.blue },
   loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center' },
