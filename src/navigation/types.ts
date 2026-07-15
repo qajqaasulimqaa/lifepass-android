@@ -34,7 +34,8 @@ export type BookingsStackParamList = SharedTabRoutes & {
 };
 
 export type CheckInStackParamList = {
-  CheckInMain: undefined;
+  /** `autoCheckInVenueId` set by a scanned venue-QR App Link → auto walk-in. */
+  CheckInMain: { autoCheckInVenueId?: string } | undefined;
   Account: undefined;
 };
 
