@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../../theme';
@@ -290,9 +291,7 @@ function WalkInCard({ venue }: { venue: Venue }) {
       </Text>
       <View style={cardStyles.costRow}>
         <View style={cardStyles.costDot} />
-        <Text style={cardStyles.costText}>
-          {venue.walkInCreditCost} credit{venue.walkInCreditCost === 1 ? '' : 's'} per visit
-        </Text>
+        <Text style={cardStyles.costText}>{priceLabel(venue)}</Text>
       </View>
     </LinearGradient>
   );
@@ -440,14 +439,23 @@ function FloatingAction({
   bottom: number;
   onBook: () => void;
 }) {
+  // Walk-in CTA bounces to the Check-in (scanner) tab — iOS pushes CheckInView
+  // from the same bar. getParent() reaches the tab navigator from this stack.
+  const navigation = useNavigation();
+  const onScan = () => navigation.getParent()?.navigate('CheckIn' as never);
+
   if (venue.walkInsAllowed) {
     return (
       <View style={[floatStyles.container, { bottom }]}>
-        <TouchableOpacity style={floatStyles.scanBar} activeOpacity={0.85}>
+        <TouchableOpacity
+          style={floatStyles.scanBar}
+          activeOpacity={0.85}
+          onPress={onScan}
+        >
           <Ionicons name="qr-code-outline" size={18} color="#FFFFFF" />
           <Text style={floatStyles.scanText}>Scan the QR code</Text>
           <View style={{ flex: 1 }} />
-          <Text style={floatStyles.scanCost}>{venue.walkInCreditCost} cr</Text>
+          <Text style={floatStyles.scanCost}>{priceLabel(venue)}</Text>
           <Ionicons name="arrow-forward" size={12} color="#FFFFFF" />
         </TouchableOpacity>
       </View>
