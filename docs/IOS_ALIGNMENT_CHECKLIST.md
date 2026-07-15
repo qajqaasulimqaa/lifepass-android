@@ -22,14 +22,12 @@ move to the API.
   dead code (never called → reviews always empty). Now fetched via the API,
   adapted to `VenueReview`, and wired into VenueDetail through a new
   `useVenueReviews` hook.
-- [ ] **`venues.ts fetchActivities` → walk-in preview `slotActivities`.**
-  ⏸️ Deferred (NOT broken — left on the live `activities` table). The booking
-  flow reaches these activities today and their UUIDs are valid for the
-  availability API. The v1-canonical discovery is `GET /check-ins/walk-in/
-  preview` (`slotActivities` / `activities`) — there is no venue-activities list
-  endpoint (iOS `BookingModels`) — but switching reshapes the venue activity
-  list (bookable slot activities only, no image/duration, walk-in-eligibility
-  gated), so it needs a focused, device-tested change rather than a blind swap.
+- [~] **`venues.ts fetchActivities` → walk-in preview `slotActivities`.**
+  Partially aligned. BookingFlow now reads the walk-in preview via
+  `fetchBookableActivities` to get the activity **provider** (unblocking Abler
+  classes). The VenueDetail activity LIST still reads the live `activities`
+  table for name/image/duration — kept intentionally so the venue page doesn't
+  lose those. Fully replacing the list with `slotActivities` remains optional.
 
 ## 🟠 P2 — Booking / check-in parity gaps
 
@@ -37,11 +35,11 @@ move to the API.
   (`createWalkInPaymentSession`) wired into CheckInScreen: no-card surcharge
   walk-ins now open the Kling hosted page and complete on confirm, with the
   same outcomes as the booking rail (venue name resolved via fetchVenueById).
-- [ ] **Abler CLASSES in the booking flow.** Only slot providers are handled;
-  class-based (Abler) venues show "No times available." Add `GET /activities/
-  {id}/classes` + a class-list step (iOS `classList` / `usesClasses`). NOTE:
-  requires the provider info from the walk-in preview (P1#3) to know which
-  venues are class-based.
+- [x] **Abler CLASSES in the booking flow.** ✅ Done. BookingFlow resolves the
+  activity `provider` from the walk-in preview's `slotActivities`
+  (`fetchBookableActivities`); Abler activities show a class-list step
+  (`fetchClasses` → `GET /activities/{id}/classes`) and book by `eventId`, with
+  the same 402 charge-consent. Slot providers are unchanged (default path).
 - [x] **Gate-refusal copy.** ✅ Done. `gateRefusalFor()` maps the DomainError
   codes to friendly copy + a "View plans" CTA (booking + check-in).
 - [ ] **Booking-preview disclosure (optional).** iOS discloses the charge on the

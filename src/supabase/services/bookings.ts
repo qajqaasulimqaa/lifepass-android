@@ -138,16 +138,14 @@ export async function fetchAvailableSlots(
 
 // ─── Create (POST /bookings) + 402 charge-consent ────────────────────────────
 
-// Slot-booking payload. On a `402 charge_consent_required`, the caller
-// re-POSTs the SAME input with `acceptCharge:true` + the disclosed amount,
-// REUSING the same Idempotency-Key so consenting never double-books.
-export type CreateBookingInput = {
-  activityId: string;
-  startsAt: string;
-  endsAt: string;
-  acceptCharge?: boolean;
-  acceptedChargeAmountIsk?: number;
-};
+// Booking payload — EXACTLY ONE shape: a slot window (startsAt/endsAt, for
+// internal/bokun/etc.) OR an Abler class (eventId). On a `402
+// charge_consent_required`, the caller re-POSTs the SAME input with
+// `acceptCharge:true` + the disclosed amount, REUSING the same Idempotency-Key.
+type BookingConsent = { acceptCharge?: boolean; acceptedChargeAmountIsk?: number };
+export type CreateBookingInput =
+  | ({ activityId: string; startsAt: string; endsAt: string } & BookingConsent)
+  | ({ activityId: string; eventId: number } & BookingConsent);
 
 export type CreateBookingResult = {
   bookingId: string;
@@ -162,6 +160,96 @@ export async function createBooking(
   idempotencyKey: string,
 ): Promise<CreateBookingResult> {
   return apiPost<CreateBookingResult>('/bookings', input, { idempotencyKey });
+}
+
+// ─── Bookable-activity discovery (walk-in preview) ───────────────────────────
+//
+// v1 has no venue-activities list endpoint; the bookable activities (WITH their
+// provider) come from the walk-in preview's `slotActivities` (iOS BookingModels
+// — "the single discovery source for the booking flow"). Abler is the only
+// class-based provider; everyone else books by slot.
+
+export type BookableActivity = {
+  id: string;
+  name: string;
+  provider: string;
+  /** Abler books by class eventId; everyone else by slot window. */
+  usesClasses: boolean;
+};
+
+type WalkInPreviewResponse = {
+  slotActivities?: { id: string; name: string; provider: string }[];
+};
+
+export async function fetchBookableActivities(venueId: string): Promise<BookableActivity[]> {
+  const resp = await apiGet<WalkInPreviewResponse>('/check-ins/walk-in/preview', { venueId });
+  return (resp.slotActivities ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    provider: a.provider,
+    usesClasses: a.provider === 'abler',
+  }));
+}
+
+// ─── Classes (Abler) — GET /activities/{id}/classes ──────────────────────────
+
+// A class session for the Time step's class list. Booked by `eventId`.
+export type ActivityClass = {
+  eventId: number;
+  name?: string;
+  start: Date;
+  coachNames: string;
+  /** Remaining spots when the class has a finite capacity. */
+  spotsLeft?: number;
+  bookable: boolean;
+  /** Why it can't be booked (full / registration window), when known. */
+  reason?: string;
+};
+
+type ApiClassesResponse = {
+  activityId: string;
+  provider: string;
+  classes: {
+    eventId: number;
+    name?: string | null;
+    start: string;
+    end: string;
+    coaches?: { firstName?: string | null; lastName?: string | null }[];
+    attendance?: { current: number; limit: number };
+    full: boolean;
+    canBook?: boolean | null;
+    canBookReason?: string | null;
+  }[];
+};
+
+export async function fetchClasses(
+  activityId: string,
+  start: Date,
+  end: Date,
+): Promise<ActivityClass[]> {
+  const resp = await apiGet<ApiClassesResponse>(`/activities/${activityId}/classes`, {
+    start: toLocalYmd(start),
+    end: toLocalYmd(end),
+  });
+  return resp.classes.map((c) => {
+    const limit = c.attendance?.limit ?? 0;
+    // limit 0 = no capacity, -1 = unlimited (mirrors iOS ActivityClass).
+    const spotsLeft = limit > 0 ? Math.max(limit - (c.attendance?.current ?? 0), 0) : undefined;
+    const bookable = c.canBook ?? (!c.full && limit !== 0);
+    const coachNames = (c.coaches ?? [])
+      .map((co) => [co.firstName, co.lastName].filter(Boolean).join(' ').trim())
+      .filter((n) => n.length > 0)
+      .join(', ');
+    return {
+      eventId: c.eventId,
+      name: c.name ?? undefined,
+      start: new Date(c.start),
+      coachNames,
+      spotsLeft,
+      bookable,
+      reason: c.canBookReason ?? undefined,
+    };
+  });
 }
 
 // ─── Pay-and-save-card rail (no saved card) ──────────────────────────────────
