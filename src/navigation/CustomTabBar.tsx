@@ -40,9 +40,22 @@ const RIGHT_TABS: TabConfig[] = [
 
 const BAR_HEIGHT = 76;
 
+// Full-screen flows with their own bottom action button — the floating tab bar
+// would cover it (BookingFlow's Confirm sat under the bar). Hide it there.
+const HIDDEN_ON_ROUTES = ['BookingFlow'];
+
+/** The focused route name inside the active tab's nested stack, if any. */
+function focusedChildRoute(state: BottomTabBarProps['state']): string | undefined {
+  const child = state.routes[state.index]?.state;
+  if (!child || typeof child.index !== 'number') return undefined;
+  return child.routes[child.index]?.name;
+}
+
 export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index].name;
+
+  if (HIDDEN_ON_ROUTES.includes(focusedChildRoute(state) ?? '')) return null;
 
   function navigateTo(routeName: string) {
     navigation.navigate(routeName);
