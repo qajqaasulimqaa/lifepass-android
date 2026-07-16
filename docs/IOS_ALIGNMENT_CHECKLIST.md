@@ -42,28 +42,30 @@ move to the API.
   the same 402 charge-consent. Slot providers are unchanged (default path).
 - [x] **Gate-refusal copy.** ✅ Done. `gateRefusalFor()` maps the DomainError
   codes to friendly copy + a "View plans" CTA (booking + check-in).
-- [ ] **Booking-preview disclosure (optional).** iOS discloses the charge on the
-  Confirm step via `GET /activities/{id}/booking-preview`; Android relies on the
-  402 alert. Works today; disclosure-before-confirm is nicer.
+- [x] **Booking-preview disclosure.** ✅ Done. The Confirm step fetches `GET
+  /activities/{id}/booking-preview` and shows a reason-aware charge line
+  (Included / Covered by pass / Top-up: X / Extra charge: X), with the primary
+  button reading "Confirm & pay X" when a charge applies. Slot bookings only.
 
 ## 🔵 P3 — Net-new features absent on Android
 
-- [~] **Co-pay (employer co-pay).** Activation flow DONE: `/company-plans/
-  context` + `/activate` (companyPlans.ts, useCompanyPlan), Account banner
-  ("{company} covers X, you pay Y/mo" → Accept & pay via the hosted checkout,
-  or instant when fully subsidised; blocked-by-personal-sub note). Follow-ups:
-  the past-due **dunning retry** (`/company-plans/retry-payment`) and wiring the
-  **pendingInvite → Kenni** claim (currently an info banner only).
+- [x] **Co-pay (employer co-pay).** ✅ Activation + dunning retry done:
+  `/company-plans/context` + `/activate` + `/retry-payment` (companyPlans.ts,
+  useCompanyPlan), Account banner ("{company} covers X, you pay Y/mo" → Accept
+  & pay, or instant when fully subsidised; blocked-by-personal-sub note) and a
+  "Retry payment" self-cure on the past-due indicator. Remaining follow-up:
+  wiring **pendingInvite → Kenni** claim (currently an info banner only).
 - [ ] **Check-in proof window.** New monorepo feature (`recent-check-in-banner`,
   5-min "show check-in to staff"). Not on Android **or** iOS-mobile yet — parity
   candidate, not urgent. No API change.
 
 ## ⚪ P4 — Copy / polish
 
-- [ ] **Reason-aware consent copy.** iOS distinguishes boutique-overflow /
-  boutique-access / premium / out-of-visits wording (`f8e8e7e`). Android shows a
-  generic "isn't included in your plan — Pay X kr", which is reason-agnostic and
-  not wrong — low priority.
+- [x] **Reason-aware disclosure.** ✅ Addressed via the booking-preview line on
+  Confirm (Included / pass / top-up / surcharge). The 402 consent alert stays
+  generic-but-clear — the reason-appropriate wording is shown before Confirm.
+- [x] **Nearby distance.** ✅ Home "Nearby" now sorts by great-circle distance
+  from the device (Reykjavík-centre fallback) with a distance label per card.
 
 ## ✅ Done this session
 

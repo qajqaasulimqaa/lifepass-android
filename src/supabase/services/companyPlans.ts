@@ -75,3 +75,24 @@ export async function activateCompanyPlan(membershipId: string): Promise<CopayAc
     externalSessionId: res.externalSessionId,
   };
 }
+
+// ─── Dunning self-cure (POST /company-plans/retry-payment) ───────────────────
+
+export type CopayRetry = { checkoutUrl: string; shareIsk: number; externalSessionId?: string };
+
+// Self-cure a past_due CO-PAY subscription — the server mints a fresh Kling
+// hosted checkout for the member's monthly share. A personal (Kling-billed)
+// past_due sub 404s here (`copay_subscription_not_found`); Kling's own dunning
+// cures those, so the caller shows "we'll retry automatically" instead.
+export async function retryCopayPayment(subscriptionId: string): Promise<CopayRetry> {
+  const res = await apiPost<{ checkoutUrl: string; shareIsk: number; externalSessionId?: string }>(
+    '/company-plans/retry-payment',
+    { subscriptionId },
+    { idempotencyKey: Crypto.randomUUID() },
+  );
+  return {
+    checkoutUrl: res.checkoutUrl,
+    shareIsk: res.shareIsk,
+    externalSessionId: res.externalSessionId,
+  };
+}
