@@ -108,13 +108,12 @@ export default function HomeScreen() {
         meters: haversineMeters(origin.latitude, origin.longitude, v.latitude, v.longitude),
       }))
       .sort((a, b) => a.meters - b.meters)
-      .slice(0, 3)
-      .map((r) => r.venue);
+      .slice(0, 3);
   }, [venues, hero?.id, userCoords]);
 
   // "Picked for you" — the venues not already in hero/nearby, ranked by review
   // volume (a global popularity signal), top 4. Mirrors the iOS `popular` shelf.
-  const nearbyIds = new Set(nearby.map((v) => v.id));
+  const nearbyIds = new Set(nearby.map((r) => r.venue.id));
   const curated = venues
     .filter((v) => v.id !== hero?.id && !nearbyIds.has(v.id))
     .sort((a, b) => (b.totalReviews ?? 0) - (a.totalReviews ?? 0))
@@ -268,9 +267,9 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalScroll}
               >
-                {nearby.map((venue) => (
+                {nearby.map(({ venue, meters }) => (
                   <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                    <NearbyVenueCard venue={venue} />
+                    <NearbyVenueCard venue={venue} distanceMeters={meters} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>
