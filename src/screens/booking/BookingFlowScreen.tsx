@@ -18,11 +18,13 @@ import {
   fetchAvailableSlots,
   fetchClasses,
   fetchBookableActivities,
+  fetchBookingPreview,
   createBooking,
   createBookingPaymentSession,
   confirmBookingPaymentSession,
   type BookingSlot,
   type ActivityClass,
+  type BookingPreview,
   type CreateBookingInput,
 } from '../../supabase/services/bookings';
 import { PAYMENT_SUCCESS_URL } from '../../supabase/services/payments';
@@ -42,6 +44,30 @@ const STEPS = ['Date', 'Time', 'Confirm'] as const;
 // Icelandic króna, e.g. "2.500 kr".
 function formatIsk(amount: number): string {
   return `${amount.toLocaleString('is-IS')} kr`;
+}
+
+// Charge-disclosure line for the Confirm step, from the booking preview.
+function disclosureText(p: BookingPreview): string {
+  switch (p.kind) {
+    case 'free': {
+      let s = 'Included in your plan.';
+      if (p.remainingMonthly != null) {
+        s += ` ${p.remainingMonthly} visit${p.remainingMonthly === 1 ? '' : 's'} left this month.`;
+      }
+      if (p.isLastBeforeTopUp) s += ' Last one before top-ups apply.';
+      return s;
+    }
+    case 'pass':
+      return 'Covered by your pass.';
+    case 'topup':
+      return p.priceIsk != null
+        ? `Top-up: ${formatIsk(p.priceIsk)}, charged when you confirm.`
+        : 'A top-up charge applies.';
+    default: // surcharge
+      return p.priceIsk != null
+        ? `Extra charge: ${formatIsk(p.priceIsk)}, charged when you confirm.`
+        : 'An extra charge applies.';
+  }
 }
 
 // Maps a refunded pay-and-save-card reason to friendly copy (mirrors iOS
@@ -82,6 +108,7 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [preview, setPreview] = useState<BookingPreview | null>(null);
 
   // One idempotency key per booking attempt — reused across the 402
   // charge-consent re-POST so consenting never double-books. Cleared on
@@ -134,6 +161,22 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
         .finally(() => setSlotsLoading(false));
     }
   }, [step, activity, selectedDate, usesClasses]);
+
+  // Disclose the charge on the Confirm step for a chosen slot (best-effort —
+  // the 402 gate is still authoritative). Classes book by eventId, no preview.
+  useEffect(() => {
+    if (step !== 2 || usesClasses || !activity || !selectedSlot) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetchBookingPreview(activity.id, selectedSlot.startsAt)
+      .then((p) => !cancelled && setPreview(p))
+      .catch(() => !cancelled && setPreview(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [step, usesClasses, activity, selectedSlot]);
 
   if (venueLoading || activitiesLoading) {
     return (
@@ -387,6 +430,7 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
           usesClasses={usesClasses}
           slot={selectedSlot}
           klass={selectedClass}
+          preview={preview}
           confirming={confirming}
           onConfirm={() => handleConfirm()}
         />
@@ -676,6 +720,7 @@ function ConfirmStep({
   usesClasses,
   slot,
   klass,
+  preview,
   confirming,
   onConfirm,
 }: {
@@ -685,9 +730,11 @@ function ConfirmStep({
   usesClasses: boolean;
   slot: BookingSlot | null;
   klass: ActivityClass | null;
+  preview: BookingPreview | null;
   confirming: boolean;
   onConfirm: () => void;
 }) {
+  const charges = preview != null && (preview.kind === 'surcharge' || preview.kind === 'topup');
   return (
     <View style={stepStyles.container}>
       <Text style={stepStyles.heading}>Confirm booking</Text>
@@ -731,9 +778,26 @@ function ConfirmStep({
         )}
       </View>
 
+      {preview && (
+        <View style={[disclosureStyles.note, charges && disclosureStyles.noteCharge]}>
+          <Ionicons
+            name={charges ? 'card-outline' : 'checkmark-circle-outline'}
+            size={14}
+            color={charges ? colors.skyBlue : colors.moss}
+          />
+          <Text style={disclosureStyles.noteText}>{disclosureText(preview)}</Text>
+        </View>
+      )}
+
       <View style={stepStyles.footer}>
         <PrimaryButton
-          title={confirming ? 'Confirming…' : 'Confirm booking'}
+          title={
+            confirming
+              ? 'Confirming…'
+              : charges && preview?.priceIsk != null
+                ? `Confirm & pay ${formatIsk(preview.priceIsk)}`
+                : 'Confirm booking'
+          }
           onPress={onConfirm}
           loading={confirming}
         />
@@ -926,6 +990,22 @@ const classStyles = StyleSheet.create({
   coach: { fontSize: 11, color: colors.paper3, marginTop: 2 },
   spots: { fontSize: 11, color: colors.paper3 },
   full: { fontSize: 10, fontWeight: '700', color: colors.paper3 },
+});
+
+const disclosureStyles = StyleSheet.create({
+  note: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.ink2,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+  },
+  noteCharge: { borderColor: colors.blue },
+  noteText: { flex: 1, fontSize: 12, color: colors.paper2, lineHeight: 17 },
 });
 
 const confirmStyles = StyleSheet.create({

@@ -252,6 +252,29 @@ export async function fetchClasses(
   });
 }
 
+// ─── Booking preview (charge disclosure) ─────────────────────────────────────
+
+// `GET /activities/{id}/booking-preview?startsAt=` — read-only mirror of the
+// create gate: discloses the charge for a slot before the user confirms
+// (mirrors iOS BookingPreview). `startsAt` must be ISO-8601 with offset.
+export type BookingPreview = {
+  kind: string; // free | surcharge | topup | pass
+  priceIsk?: number | null;
+  remainingMonthly?: number | null;
+  topupReason?: string | null;
+  surchargeReason?: string | null;
+  isLastBeforeTopUp?: boolean | null;
+};
+
+export async function fetchBookingPreview(
+  activityId: string,
+  startsAtISO: string,
+): Promise<BookingPreview> {
+  return apiGet<BookingPreview>(`/activities/${activityId}/booking-preview`, {
+    startsAt: startsAtISO,
+  });
+}
+
 // ─── Pay-and-save-card rail (no saved card) ──────────────────────────────────
 //
 // A charge-bearing booking returns `402 no_payment_method_on_file` when the
