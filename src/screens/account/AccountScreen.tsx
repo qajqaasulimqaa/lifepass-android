@@ -15,8 +15,14 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
+import { useCompanyPlan } from '../../supabase/hooks/useCompanyPlan';
 import { planDisplayName } from '../../supabase/types/subscription';
+import { activateCompanyPlan, type PendingActivation } from '../../supabase/services/companyPlans';
+import { settleHostedCheckout } from '../../supabase/services/payments';
 import Kicker from '../../components/Kicker';
+import PrimaryButton from '../../components/PrimaryButton';
+
+const formatIsk = (n: number) => `${n.toLocaleString('is-IS')} kr`;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -24,8 +30,45 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { user, signOut } = useAuth();
-  const { subscription, loading: subLoading } = useSubscription();
+  const { subscription, loading: subLoading, refetch: refetchSubscription } = useSubscription();
+  const { context: companyPlan, refetch: refetchCompanyPlan } = useCompanyPlan();
   const [signingOut, setSigningOut] = useState(false);
+  const [activating, setActivating] = useState(false);
+
+  // Accept an employer co-pay package: confirm the recurring share, then
+  // activate (instant when the subsidy covers it, else the hosted checkout for
+  // the monthly share which also vaults the card). Mirrors iOS AccountView.
+  function confirmActivateCopay(activation: PendingActivation) {
+    const share = activation.shareIsk;
+    Alert.alert(
+      'Activate benefit',
+      share > 0
+        ? `${activation.companyName} covers ${formatIsk(activation.subsidyIsk)} of ${formatIsk(activation.memberPriceIsk)}/mo. You'll pay ${formatIsk(share)}/mo, charged automatically. Continue?`
+        : `${activation.companyName} fully covers your ${activation.productName} membership. Activate now?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: share > 0 ? `Pay ${formatIsk(share)}/mo` : 'Activate', onPress: () => void activateCopay(activation) },
+      ],
+    );
+  }
+
+  async function activateCopay(activation: PendingActivation) {
+    setActivating(true);
+    try {
+      const result = await activateCompanyPlan(activation.membershipId);
+      if (result.kind === 'checkout') {
+        const outcome = await settleHostedCheckout(result.checkoutUrl, result.externalSessionId);
+        if (outcome === 'canceled') return; // member backed out — leave the banner
+      }
+      // provisioned, fulfilled, or pending → refresh plan + benefit state.
+      refetchCompanyPlan();
+      refetchSubscription();
+    } catch (e) {
+      Alert.alert('Activation failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setActivating(false);
+    }
+  }
 
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Member';
   const email = user?.email ?? '';
@@ -152,6 +195,23 @@ export default function AccountScreen() {
           </LinearGradient>
         </View>
 
+        {/* ── Company co-pay benefit ── */}
+        {companyPlan?.pendingActivation ? (
+          <CopayBanner
+            activation={companyPlan.pendingActivation}
+            activating={activating}
+            onAccept={() => confirmActivateCopay(companyPlan.pendingActivation as PendingActivation)}
+          />
+        ) : companyPlan?.pendingInvite ? (
+          <View style={copayStyles.card}>
+            <Kicker text="Company benefit" color={colors.skyBlue} />
+            <Text style={copayStyles.offer}>
+              {companyPlan.pendingInvite.companyName} invited you to LifePass. Verify your
+              identity to claim your membership.
+            </Text>
+          </View>
+        ) : null}
+
         {/* ── Membership section ── */}
         <View style={styles.section}>
           <View style={{ paddingHorizontal: 4 }}><Kicker text="Membership" color={colors.paper3} /></View>
@@ -231,6 +291,63 @@ export default function AccountScreen() {
 function RowDivider() {
   return <View style={rowStyles.divider} />;
 }
+
+function CopayBanner({
+  activation,
+  activating,
+  onAccept,
+}: {
+  activation: PendingActivation;
+  activating: boolean;
+  onAccept: () => void;
+}) {
+  const blocked = activation.blocked === 'existing_subscription';
+  const share = activation.shareIsk;
+  return (
+    <View style={copayStyles.card}>
+      <Kicker text="Company benefit" color={colors.skyBlue} />
+      <Text style={copayStyles.offer}>
+        {activation.companyName} covers {formatIsk(activation.subsidyIsk)} of your{' '}
+        {formatIsk(activation.memberPriceIsk)} {activation.productName} membership
+        {share > 0 ? ` — you pay ${formatIsk(share)}/mo.` : ' — fully covered.'}
+      </Text>
+      {blocked ? (
+        <Text style={copayStyles.blocked}>
+          You already have a personal plan. Cancel it first to switch to your company benefit.
+        </Text>
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <PrimaryButton
+            title={
+              activating
+                ? 'Activating…'
+                : share > 0
+                  ? `Accept & pay ${formatIsk(share)}/mo`
+                  : 'Activate benefit'
+            }
+            onPress={onAccept}
+            loading={activating}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const copayStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.ink2,
+    borderWidth: 0.5,
+    borderColor: colors.line2,
+    gap: 8,
+  },
+  offer: { fontSize: 14, color: colors.paper, lineHeight: 20 },
+  blocked: { fontSize: 12, color: colors.paper3, marginTop: 2 },
+});
 
 function Row({
   title,

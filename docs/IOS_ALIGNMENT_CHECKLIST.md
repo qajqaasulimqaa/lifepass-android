@@ -48,9 +48,12 @@ move to the API.
 
 ## 🔵 P3 — Net-new features absent on Android
 
-- [ ] **Co-pay (employer co-pay).** Entirely absent. Backend ready
-  (`/company-plans/context`, `/activate`, `/retry-payment`). iOS: activation
-  banner + accept flow on Account, dunning rail, checkout. Large.
+- [~] **Co-pay (employer co-pay).** Activation flow DONE: `/company-plans/
+  context` + `/activate` (companyPlans.ts, useCompanyPlan), Account banner
+  ("{company} covers X, you pay Y/mo" → Accept & pay via the hosted checkout,
+  or instant when fully subsidised; blocked-by-personal-sub note). Follow-ups:
+  the past-due **dunning retry** (`/company-plans/retry-payment`) and wiring the
+  **pendingInvite → Kenni** claim (currently an info banner only).
 - [ ] **Check-in proof window.** New monorepo feature (`recent-check-in-banner`,
   5-min "show check-in to staff"). Not on Android **or** iOS-mobile yet — parity
   candidate, not urgent. No API change.
