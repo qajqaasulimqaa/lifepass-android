@@ -110,7 +110,18 @@ export async function startCheckout(
   opts?: { saveCard?: boolean },
 ): Promise<CheckoutOutcome> {
   const { url, externalSessionId } = await createCheckout(productSlug, opts);
+  return settleHostedCheckout(url, externalSessionId);
+}
 
+/**
+ * Open a Kling hosted-checkout URL and settle the outcome on return. Shared by
+ * pass/plan checkout AND co-pay activation/retry (which return their URL from a
+ * different endpoint). openAuthSessionAsync captures the lifepass:// return.
+ */
+export async function settleHostedCheckout(
+  url: string,
+  externalSessionId?: string,
+): Promise<CheckoutOutcome> {
   const result = await WebBrowser.openAuthSessionAsync(url, PAYMENT_SUCCESS_URL);
   if (result.type !== 'success' || !result.url) return 'canceled';
   if (result.url.includes('payment-canceled')) return 'canceled';

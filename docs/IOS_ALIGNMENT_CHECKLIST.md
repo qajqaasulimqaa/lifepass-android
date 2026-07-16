@@ -22,47 +22,50 @@ move to the API.
   dead code (never called → reviews always empty). Now fetched via the API,
   adapted to `VenueReview`, and wired into VenueDetail through a new
   `useVenueReviews` hook.
-- [ ] **`venues.ts fetchActivities` → walk-in preview `slotActivities`.**
-  ⏸️ Deferred (NOT broken — left on the live `activities` table). The booking
-  flow reaches these activities today and their UUIDs are valid for the
-  availability API. The v1-canonical discovery is `GET /check-ins/walk-in/
-  preview` (`slotActivities` / `activities`) — there is no venue-activities list
-  endpoint (iOS `BookingModels`) — but switching reshapes the venue activity
-  list (bookable slot activities only, no image/duration, walk-in-eligibility
-  gated), so it needs a focused, device-tested change rather than a blind swap.
+- [~] **`venues.ts fetchActivities` → walk-in preview `slotActivities`.**
+  Partially aligned. BookingFlow now reads the walk-in preview via
+  `fetchBookableActivities` to get the activity **provider** (unblocking Abler
+  classes). The VenueDetail activity LIST still reads the live `activities`
+  table for name/image/duration — kept intentionally so the venue page doesn't
+  lose those. Fully replacing the list with `slotActivities` remains optional.
 
 ## 🟠 P2 — Booking / check-in parity gaps
 
-- [ ] **Pay-and-save-card for WALK-INS.** The rail is done for bookings only
-  (`kind: 'booking'`). A no-saved-card surcharge **walk-in** dead-ends with an
-  "add a card" alert. Extend to `kind: 'walk_in'` (same `/bookings/payment-
-  sessions` endpoint with `venueId`, no `startsAt/endsAt`).
-- [ ] **Abler CLASSES in the booking flow.** Only slot providers are handled;
-  class-based (Abler) venues show "No times available." Add `GET /activities/
-  {id}/classes` + a class-list step (iOS `classList` / `usesClasses`).
-- [ ] **Gate-refusal copy.** iOS maps DomainError codes (`no_active_plan_or_
-  pass`, `boutique_requires_membership`, `daily_use_cap_reached`,
-  `venue_already_booked_today`, `slot_already_booked`, `concurrent_cap_reached`)
-  to friendly copy + a "View plans" CTA. Android shows the raw server message.
-- [ ] **Booking-preview disclosure (optional).** iOS discloses the charge on the
-  Confirm step via `GET /activities/{id}/booking-preview`; Android relies on the
-  402 alert. Works today; disclosure-before-confirm is nicer.
+- [x] **Pay-and-save-card for WALK-INS.** ✅ Done. `kind: 'walk_in'` session
+  (`createWalkInPaymentSession`) wired into CheckInScreen: no-card surcharge
+  walk-ins now open the Kling hosted page and complete on confirm, with the
+  same outcomes as the booking rail (venue name resolved via fetchVenueById).
+- [x] **Abler CLASSES in the booking flow.** ✅ Done. BookingFlow resolves the
+  activity `provider` from the walk-in preview's `slotActivities`
+  (`fetchBookableActivities`); Abler activities show a class-list step
+  (`fetchClasses` → `GET /activities/{id}/classes`) and book by `eventId`, with
+  the same 402 charge-consent. Slot providers are unchanged (default path).
+- [x] **Gate-refusal copy.** ✅ Done. `gateRefusalFor()` maps the DomainError
+  codes to friendly copy + a "View plans" CTA (booking + check-in).
+- [x] **Booking-preview disclosure.** ✅ Done. The Confirm step fetches `GET
+  /activities/{id}/booking-preview` and shows a reason-aware charge line
+  (Included / Covered by pass / Top-up: X / Extra charge: X), with the primary
+  button reading "Confirm & pay X" when a charge applies. Slot bookings only.
 
 ## 🔵 P3 — Net-new features absent on Android
 
-- [ ] **Co-pay (employer co-pay).** Entirely absent. Backend ready
-  (`/company-plans/context`, `/activate`, `/retry-payment`). iOS: activation
-  banner + accept flow on Account, dunning rail, checkout. Large.
+- [x] **Co-pay (employer co-pay).** ✅ Activation + dunning retry done:
+  `/company-plans/context` + `/activate` + `/retry-payment` (companyPlans.ts,
+  useCompanyPlan), Account banner ("{company} covers X, you pay Y/mo" → Accept
+  & pay, or instant when fully subsidised; blocked-by-personal-sub note) and a
+  "Retry payment" self-cure on the past-due indicator. Remaining follow-up:
+  wiring **pendingInvite → Kenni** claim (currently an info banner only).
 - [ ] **Check-in proof window.** New monorepo feature (`recent-check-in-banner`,
   5-min "show check-in to staff"). Not on Android **or** iOS-mobile yet — parity
   candidate, not urgent. No API change.
 
 ## ⚪ P4 — Copy / polish
 
-- [ ] **Reason-aware consent copy.** iOS distinguishes boutique-overflow /
-  boutique-access / premium / out-of-visits wording (`f8e8e7e`). Android shows a
-  generic "isn't included in your plan — Pay X kr", which is reason-agnostic and
-  not wrong — low priority.
+- [x] **Reason-aware disclosure.** ✅ Addressed via the booking-preview line on
+  Confirm (Included / pass / top-up / surcharge). The 402 consent alert stays
+  generic-but-clear — the reason-appropriate wording is shown before Confirm.
+- [x] **Nearby distance.** ✅ Home "Nearby" now sorts by great-circle distance
+  from the device (Reykjavík-centre fallback) with a distance label per card.
 
 ## ✅ Done this session
 

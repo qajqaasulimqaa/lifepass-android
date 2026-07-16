@@ -6,9 +6,16 @@ import type { Venue } from '../types/venue';
 
 type Props = {
   venue: Venue;
+  /** Distance from the user in metres, shown next to the city when present. */
+  distanceMeters?: number;
 };
 
-export default function NearbyVenueCard({ venue }: Props) {
+function formatDistance(m: number): string {
+  if (m < 1000) return `${Math.round(m / 100) * 100} m`;
+  return `${(m / 1000).toFixed(1)} km`;
+}
+
+export default function NearbyVenueCard({ venue, distanceMeters }: Props) {
   return (
     <View style={styles.card}>
       <View style={styles.imageWrapper}>
@@ -25,7 +32,10 @@ export default function NearbyVenueCard({ venue }: Props) {
       <View style={styles.info}>
         <View style={styles.infoText}>
           <Text style={styles.name} numberOfLines={1}>{venue.name}</Text>
-          <Text style={styles.city} numberOfLines={1}>{venue.city}</Text>
+          <Text style={styles.city} numberOfLines={1}>
+            {venue.city}
+            {distanceMeters != null ? ` · ${formatDistance(distanceMeters)}` : ''}
+          </Text>
         </View>
         <BookItPill fullWidth />
       </View>

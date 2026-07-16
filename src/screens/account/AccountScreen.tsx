@@ -15,8 +15,19 @@ import { useNavigation } from '@react-navigation/native';
 import { colors } from '../../theme';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
+import { useCompanyPlan } from '../../supabase/hooks/useCompanyPlan';
 import { planDisplayName } from '../../supabase/types/subscription';
+import {
+  activateCompanyPlan,
+  retryCopayPayment,
+  type PendingActivation,
+} from '../../supabase/services/companyPlans';
+import { settleHostedCheckout } from '../../supabase/services/payments';
+import { ApiError } from '../../api/client';
 import Kicker from '../../components/Kicker';
+import PrimaryButton from '../../components/PrimaryButton';
+
+const formatIsk = (n: number) => `${n.toLocaleString('is-IS')} kr`;
 
 // ─── Screen ───────────────────────────────────────────────────────────────────
 
@@ -24,8 +35,70 @@ export default function AccountScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<any>();
   const { user, signOut } = useAuth();
-  const { subscription, loading: subLoading } = useSubscription();
+  const { subscription, loading: subLoading, refetch: refetchSubscription } = useSubscription();
+  const { context: companyPlan, refetch: refetchCompanyPlan } = useCompanyPlan();
   const [signingOut, setSigningOut] = useState(false);
+  const [activating, setActivating] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+
+  // Self-cure a past-due co-pay subscription: open a fresh hosted checkout for
+  // the monthly share. A personal (Kling-billed) past_due sub 404s — its bank
+  // dunning retries automatically, so we say so instead. Mirrors iOS.
+  async function retryPayment() {
+    if (!subscription) return;
+    setRetrying(true);
+    try {
+      const res = await retryCopayPayment(subscription.id);
+      const outcome = await settleHostedCheckout(res.checkoutUrl, res.externalSessionId);
+      if (outcome !== 'canceled') refetchSubscription();
+    } catch (e) {
+      if (e instanceof ApiError && e.code === 'copay_subscription_not_found') {
+        Alert.alert(
+          'Automatic retry',
+          "Your bank will retry the charge automatically — no action needed. Access returns once it clears.",
+        );
+      } else {
+        Alert.alert('Retry failed', e instanceof Error ? e.message : 'Please try again.');
+      }
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  // Accept an employer co-pay package: confirm the recurring share, then
+  // activate (instant when the subsidy covers it, else the hosted checkout for
+  // the monthly share which also vaults the card). Mirrors iOS AccountView.
+  function confirmActivateCopay(activation: PendingActivation) {
+    const share = activation.shareIsk;
+    Alert.alert(
+      'Activate benefit',
+      share > 0
+        ? `${activation.companyName} covers ${formatIsk(activation.subsidyIsk)} of ${formatIsk(activation.memberPriceIsk)}/mo. You'll pay ${formatIsk(share)}/mo, charged automatically. Continue?`
+        : `${activation.companyName} fully covers your ${activation.productName} membership. Activate now?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: share > 0 ? `Pay ${formatIsk(share)}/mo` : 'Activate', onPress: () => void activateCopay(activation) },
+      ],
+    );
+  }
+
+  async function activateCopay(activation: PendingActivation) {
+    setActivating(true);
+    try {
+      const result = await activateCompanyPlan(activation.membershipId);
+      if (result.kind === 'checkout') {
+        const outcome = await settleHostedCheckout(result.checkoutUrl, result.externalSessionId);
+        if (outcome === 'canceled') return; // member backed out — leave the banner
+      }
+      // provisioned, fulfilled, or pending → refresh plan + benefit state.
+      refetchCompanyPlan();
+      refetchSubscription();
+    } catch (e) {
+      Alert.alert('Activation failed', e instanceof Error ? e.message : 'Please try again.');
+    } finally {
+      setActivating(false);
+    }
+  }
 
   const displayName = user?.user_metadata?.full_name ?? user?.email ?? 'Member';
   const email = user?.email ?? '';
@@ -139,10 +212,22 @@ export default function AccountScreen() {
                     <Text style={memberCard.renewal}>{periodEndLabel}</Text>
                   )}
                   {subscription?.status === 'past_due' && (
-                    <View style={memberCard.luxuryChip}>
-                      <Ionicons name="alert-circle" size={10} color={colors.skyBlue} />
-                      <Text style={memberCard.luxuryChipText}>Payment due — access paused</Text>
-                    </View>
+                    <>
+                      <View style={memberCard.luxuryChip}>
+                        <Ionicons name="alert-circle" size={10} color={colors.skyBlue} />
+                        <Text style={memberCard.luxuryChipText}>Payment due — access paused</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={memberCard.retryBtn}
+                        onPress={retryPayment}
+                        disabled={retrying}
+                        activeOpacity={0.85}
+                      >
+                        <Text style={memberCard.retryText}>
+                          {retrying ? 'Opening…' : 'Retry payment'}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
                   )}
                 </View>
               </>
@@ -151,6 +236,23 @@ export default function AccountScreen() {
         </View>
           </LinearGradient>
         </View>
+
+        {/* ── Company co-pay benefit ── */}
+        {companyPlan?.pendingActivation ? (
+          <CopayBanner
+            activation={companyPlan.pendingActivation}
+            activating={activating}
+            onAccept={() => confirmActivateCopay(companyPlan.pendingActivation as PendingActivation)}
+          />
+        ) : companyPlan?.pendingInvite ? (
+          <View style={copayStyles.card}>
+            <Kicker text="Company benefit" color={colors.skyBlue} />
+            <Text style={copayStyles.offer}>
+              {companyPlan.pendingInvite.companyName} invited you to LifePass. Verify your
+              identity to claim your membership.
+            </Text>
+          </View>
+        ) : null}
 
         {/* ── Membership section ── */}
         <View style={styles.section}>
@@ -231,6 +333,63 @@ export default function AccountScreen() {
 function RowDivider() {
   return <View style={rowStyles.divider} />;
 }
+
+function CopayBanner({
+  activation,
+  activating,
+  onAccept,
+}: {
+  activation: PendingActivation;
+  activating: boolean;
+  onAccept: () => void;
+}) {
+  const blocked = activation.blocked === 'existing_subscription';
+  const share = activation.shareIsk;
+  return (
+    <View style={copayStyles.card}>
+      <Kicker text="Company benefit" color={colors.skyBlue} />
+      <Text style={copayStyles.offer}>
+        {activation.companyName} covers {formatIsk(activation.subsidyIsk)} of your{' '}
+        {formatIsk(activation.memberPriceIsk)} {activation.productName} membership
+        {share > 0 ? ` — you pay ${formatIsk(share)}/mo.` : ' — fully covered.'}
+      </Text>
+      {blocked ? (
+        <Text style={copayStyles.blocked}>
+          You already have a personal plan. Cancel it first to switch to your company benefit.
+        </Text>
+      ) : (
+        <View style={{ marginTop: 10 }}>
+          <PrimaryButton
+            title={
+              activating
+                ? 'Activating…'
+                : share > 0
+                  ? `Accept & pay ${formatIsk(share)}/mo`
+                  : 'Activate benefit'
+            }
+            onPress={onAccept}
+            loading={activating}
+          />
+        </View>
+      )}
+    </View>
+  );
+}
+
+const copayStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginTop: 16,
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: colors.ink2,
+    borderWidth: 0.5,
+    borderColor: colors.line2,
+    gap: 8,
+  },
+  offer: { fontSize: 14, color: colors.paper, lineHeight: 20 },
+  blocked: { fontSize: 12, color: colors.paper3, marginTop: 2 },
+});
 
 function Row({
   title,
@@ -393,6 +552,15 @@ const memberCard = StyleSheet.create({
     color: colors.skyBlue,
     fontWeight: '500',
   },
+  retryBtn: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.blue,
+  },
+  retryText: { fontSize: 12, fontWeight: '600', color: '#FFFFFF' },
 });
 
 const styles = StyleSheet.create({

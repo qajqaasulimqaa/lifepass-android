@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -18,6 +18,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { colors } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
+import { useLocation } from '../../hooks/useLocation';
+import { haversineMeters, REYKJAVIK_CENTRE } from '../../lib/geo';
 import { useBookings } from '../../supabase/hooks/useBookings';
 import { useAuth } from '../../supabase/hooks/useAuth';
 import { useWeather } from '../../hooks/useWeather';
@@ -72,6 +74,7 @@ export default function HomeScreen() {
   const { venues, loading } = useVenues();
   const { bookings: upcomingBookings } = useBookings(true);
   const { weather } = useWeather();
+  const userCoords = useLocation();
 
   const greeting = getGreeting();
   const fullName: string = user?.user_metadata?.full_name ?? user?.email ?? '';
@@ -93,12 +96,24 @@ export default function HomeScreen() {
   );
 
   const hero = venues.find((v) => v.id === heroVenueId) ?? venues[0];
-  // "Close by" — exclude the hero so it never appears twice on screen.
-  const nearby = venues.filter((v) => v.id !== hero?.id).slice(0, 3);
+  // "Close by" — the 3 venues nearest the user (device fix, else Reykjavík
+  // centre), excluding the hero and any venue without real coordinates. This
+  // was previously just the first 3 venues, so it showed far-away spots.
+  const nearby = useMemo(() => {
+    const origin = userCoords ?? REYKJAVIK_CENTRE;
+    return venues
+      .filter((v) => v.id !== hero?.id && !!v.latitude && !!v.longitude)
+      .map((v) => ({
+        venue: v,
+        meters: haversineMeters(origin.latitude, origin.longitude, v.latitude, v.longitude),
+      }))
+      .sort((a, b) => a.meters - b.meters)
+      .slice(0, 3);
+  }, [venues, hero?.id, userCoords]);
 
   // "Picked for you" — the venues not already in hero/nearby, ranked by review
   // volume (a global popularity signal), top 4. Mirrors the iOS `popular` shelf.
-  const nearbyIds = new Set(nearby.map((v) => v.id));
+  const nearbyIds = new Set(nearby.map((r) => r.venue.id));
   const curated = venues
     .filter((v) => v.id !== hero?.id && !nearbyIds.has(v.id))
     .sort((a, b) => (b.totalReviews ?? 0) - (a.totalReviews ?? 0))
@@ -252,9 +267,9 @@ export default function HomeScreen() {
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.horizontalScroll}
               >
-                {nearby.map((venue) => (
+                {nearby.map(({ venue, meters }) => (
                   <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                    <NearbyVenueCard venue={venue} />
+                    <NearbyVenueCard venue={venue} distanceMeters={meters} />
                   </TouchableOpacity>
                 ))}
               </ScrollView>

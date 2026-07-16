@@ -138,16 +138,14 @@ export async function fetchAvailableSlots(
 
 // ─── Create (POST /bookings) + 402 charge-consent ────────────────────────────
 
-// Slot-booking payload. On a `402 charge_consent_required`, the caller
-// re-POSTs the SAME input with `acceptCharge:true` + the disclosed amount,
-// REUSING the same Idempotency-Key so consenting never double-books.
-export type CreateBookingInput = {
-  activityId: string;
-  startsAt: string;
-  endsAt: string;
-  acceptCharge?: boolean;
-  acceptedChargeAmountIsk?: number;
-};
+// Booking payload — EXACTLY ONE shape: a slot window (startsAt/endsAt, for
+// internal/bokun/etc.) OR an Abler class (eventId). On a `402
+// charge_consent_required`, the caller re-POSTs the SAME input with
+// `acceptCharge:true` + the disclosed amount, REUSING the same Idempotency-Key.
+type BookingConsent = { acceptCharge?: boolean; acceptedChargeAmountIsk?: number };
+export type CreateBookingInput =
+  | ({ activityId: string; startsAt: string; endsAt: string } & BookingConsent)
+  | ({ activityId: string; eventId: number } & BookingConsent);
 
 export type CreateBookingResult = {
   bookingId: string;
@@ -162,6 +160,119 @@ export async function createBooking(
   idempotencyKey: string,
 ): Promise<CreateBookingResult> {
   return apiPost<CreateBookingResult>('/bookings', input, { idempotencyKey });
+}
+
+// ─── Bookable-activity discovery (walk-in preview) ───────────────────────────
+//
+// v1 has no venue-activities list endpoint; the bookable activities (WITH their
+// provider) come from the walk-in preview's `slotActivities` (iOS BookingModels
+// — "the single discovery source for the booking flow"). Abler is the only
+// class-based provider; everyone else books by slot.
+
+export type BookableActivity = {
+  id: string;
+  name: string;
+  provider: string;
+  /** Abler books by class eventId; everyone else by slot window. */
+  usesClasses: boolean;
+};
+
+type WalkInPreviewResponse = {
+  slotActivities?: { id: string; name: string; provider: string }[];
+};
+
+export async function fetchBookableActivities(venueId: string): Promise<BookableActivity[]> {
+  const resp = await apiGet<WalkInPreviewResponse>('/check-ins/walk-in/preview', { venueId });
+  return (resp.slotActivities ?? []).map((a) => ({
+    id: a.id,
+    name: a.name,
+    provider: a.provider,
+    usesClasses: a.provider === 'abler',
+  }));
+}
+
+// ─── Classes (Abler) — GET /activities/{id}/classes ──────────────────────────
+
+// A class session for the Time step's class list. Booked by `eventId`.
+export type ActivityClass = {
+  eventId: number;
+  name?: string;
+  start: Date;
+  coachNames: string;
+  /** Remaining spots when the class has a finite capacity. */
+  spotsLeft?: number;
+  bookable: boolean;
+  /** Why it can't be booked (full / registration window), when known. */
+  reason?: string;
+};
+
+type ApiClassesResponse = {
+  activityId: string;
+  provider: string;
+  classes: {
+    eventId: number;
+    name?: string | null;
+    start: string;
+    end: string;
+    coaches?: { firstName?: string | null; lastName?: string | null }[];
+    attendance?: { current: number; limit: number };
+    full: boolean;
+    canBook?: boolean | null;
+    canBookReason?: string | null;
+  }[];
+};
+
+export async function fetchClasses(
+  activityId: string,
+  start: Date,
+  end: Date,
+): Promise<ActivityClass[]> {
+  const resp = await apiGet<ApiClassesResponse>(`/activities/${activityId}/classes`, {
+    start: toLocalYmd(start),
+    end: toLocalYmd(end),
+  });
+  return resp.classes.map((c) => {
+    const limit = c.attendance?.limit ?? 0;
+    // limit 0 = no capacity, -1 = unlimited (mirrors iOS ActivityClass).
+    const spotsLeft = limit > 0 ? Math.max(limit - (c.attendance?.current ?? 0), 0) : undefined;
+    const bookable = c.canBook ?? (!c.full && limit !== 0);
+    const coachNames = (c.coaches ?? [])
+      .map((co) => [co.firstName, co.lastName].filter(Boolean).join(' ').trim())
+      .filter((n) => n.length > 0)
+      .join(', ');
+    return {
+      eventId: c.eventId,
+      name: c.name ?? undefined,
+      start: new Date(c.start),
+      coachNames,
+      spotsLeft,
+      bookable,
+      reason: c.canBookReason ?? undefined,
+    };
+  });
+}
+
+// ─── Booking preview (charge disclosure) ─────────────────────────────────────
+
+// `GET /activities/{id}/booking-preview?startsAt=` — read-only mirror of the
+// create gate: discloses the charge for a slot before the user confirms
+// (mirrors iOS BookingPreview). `startsAt` must be ISO-8601 with offset.
+export type BookingPreview = {
+  kind: string; // free | surcharge | topup | pass
+  priceIsk?: number | null;
+  remainingMonthly?: number | null;
+  topupReason?: string | null;
+  surchargeReason?: string | null;
+  isLastBeforeTopUp?: boolean | null;
+};
+
+export async function fetchBookingPreview(
+  activityId: string,
+  startsAtISO: string,
+): Promise<BookingPreview> {
+  return apiGet<BookingPreview>(`/activities/${activityId}/booking-preview`, {
+    startsAt: startsAtISO,
+  });
 }
 
 // ─── Pay-and-save-card rail (no saved card) ──────────────────────────────────
@@ -189,21 +300,14 @@ export type BookingPaySession =
   | { hasCard: true }
   | { hasCard: false; url: string; externalSessionId: string; amountIsk: number };
 
-export async function createBookingPaymentSession(
-  input: { activityId: string; startsAt: string; endsAt: string; acceptedChargeAmountIsk: number },
+async function createPaymentSession(
+  body: Record<string, unknown>,
   idempotencyKey: string,
+  fallbackAmount: number,
 ): Promise<BookingPaySession> {
-  const res = await apiPost<CreateSessionResponse>(
-    '/bookings/payment-sessions',
-    {
-      kind: 'booking',
-      activityId: input.activityId,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
-    },
-    { idempotencyKey },
-  );
+  const res = await apiPost<CreateSessionResponse>('/bookings/payment-sessions', body, {
+    idempotencyKey,
+  });
   if (res.hasCard) return { hasCard: true };
   if (!res.url || !res.externalSessionId) {
     // Contract violation (hasCard:false with no url) — retryable, not a no-op.
@@ -213,8 +317,44 @@ export async function createBookingPaymentSession(
     hasCard: false,
     url: res.url,
     externalSessionId: res.externalSessionId,
-    amountIsk: res.amountIsk ?? input.acceptedChargeAmountIsk,
+    amountIsk: res.amountIsk ?? fallbackAmount,
   };
+}
+
+export async function createBookingPaymentSession(
+  input: { activityId: string; startsAt: string; endsAt: string; acceptedChargeAmountIsk: number },
+  idempotencyKey: string,
+): Promise<BookingPaySession> {
+  return createPaymentSession(
+    {
+      kind: 'booking',
+      activityId: input.activityId,
+      startsAt: input.startsAt,
+      endsAt: input.endsAt,
+      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
+    },
+    idempotencyKey,
+    input.acceptedChargeAmountIsk,
+  );
+}
+
+// Walk-in variant: `venueId` is required, no start/end window, `activityId` is
+// null for a venue-level walk-in. Same `/bookings/payment-sessions` endpoint
+// with `kind: 'walk_in'` (server schema requires activityId to be present).
+export async function createWalkInPaymentSession(
+  input: { venueId: string; activityId?: string | null; acceptedChargeAmountIsk: number },
+  idempotencyKey: string,
+): Promise<BookingPaySession> {
+  return createPaymentSession(
+    {
+      kind: 'walk_in',
+      activityId: input.activityId ?? null,
+      venueId: input.venueId,
+      acceptedChargeAmountIsk: input.acceptedChargeAmountIsk,
+    },
+    idempotencyKey,
+    input.acceptedChargeAmountIsk,
+  );
 }
 
 export type BookingPayStatus =

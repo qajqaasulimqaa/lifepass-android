@@ -16,10 +16,15 @@ import { colors } from '../../theme';
 import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
 import {
   fetchAvailableSlots,
+  fetchClasses,
+  fetchBookableActivities,
+  fetchBookingPreview,
   createBooking,
   createBookingPaymentSession,
   confirmBookingPaymentSession,
   type BookingSlot,
+  type ActivityClass,
+  type BookingPreview,
   type CreateBookingInput,
 } from '../../supabase/services/bookings';
 import { PAYMENT_SUCCESS_URL } from '../../supabase/services/payments';
@@ -39,6 +44,30 @@ const STEPS = ['Date', 'Time', 'Confirm'] as const;
 // Icelandic króna, e.g. "2.500 kr".
 function formatIsk(amount: number): string {
   return `${amount.toLocaleString('is-IS')} kr`;
+}
+
+// Charge-disclosure line for the Confirm step, from the booking preview.
+function disclosureText(p: BookingPreview): string {
+  switch (p.kind) {
+    case 'free': {
+      let s = 'Included in your plan.';
+      if (p.remainingMonthly != null) {
+        s += ` ${p.remainingMonthly} visit${p.remainingMonthly === 1 ? '' : 's'} left this month.`;
+      }
+      if (p.isLastBeforeTopUp) s += ' Last one before top-ups apply.';
+      return s;
+    }
+    case 'pass':
+      return 'Covered by your pass.';
+    case 'topup':
+      return p.priceIsk != null
+        ? `Top-up: ${formatIsk(p.priceIsk)}, charged when you confirm.`
+        : 'A top-up charge applies.';
+    default: // surcharge
+      return p.priceIsk != null
+        ? `Extra charge: ${formatIsk(p.priceIsk)}, charged when you confirm.`
+        : 'An extra charge applies.';
+  }
 }
 
 // Maps a refunded pay-and-save-card reason to friendly copy (mirrors iOS
@@ -71,36 +100,83 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [selectedSlot, setSelectedSlot] = useState<BookingSlot | null>(null);
   const [slots, setSlots] = useState<BookingSlot[]>([]);
+  const [selectedClass, setSelectedClass] = useState<ActivityClass | null>(null);
+  const [classes, setClasses] = useState<ActivityClass[]>([]);
+  // Abler activities book by class eventId; everyone else by slot window.
+  const [usesClasses, setUsesClasses] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsError, setSlotsError] = useState<string | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const [preview, setPreview] = useState<BookingPreview | null>(null);
 
   // One idempotency key per booking attempt — reused across the 402
   // charge-consent re-POST so consenting never double-books. Cleared on
-  // success and whenever the chosen slot changes (a new booking target).
+  // success and whenever the chosen slot/class changes (a new booking target).
   const idempotencyKey = useRef<string | null>(null);
   useEffect(() => {
     idempotencyKey.current = null;
-  }, [selectedSlot?.id]);
+  }, [selectedSlot?.id, selectedClass?.eventId]);
 
-  // Fetch availability when the user reaches the Time step (or changes date).
+  // Resolve whether this activity is class-based (Abler) from the walk-in
+  // preview's slotActivities — the v1 discovery source for provider. Defaults
+  // to slot mode (existing behaviour) when unknown.
+  useEffect(() => {
+    if (!activityId) return;
+    fetchBookableActivities(venueId)
+      .then((list) => setUsesClasses(list.find((a) => a.id === activityId)?.usesClasses ?? false))
+      .catch(() => setUsesClasses(false));
+  }, [venueId, activityId]);
+
+  // Load the Time step on arrival / date change: classes for Abler, slots
+  // otherwise. Surfacing the error avoids a silent "nothing available".
   useEffect(() => {
     if (step !== 1 || !activity) return;
     setSlotsLoading(true);
     setSlotsError(null);
     setSelectedSlot(null);
-    fetchAvailableSlots(activity.id, selectedDate)
-      .then(setSlots)
-      .catch((e) => {
-        setSlots([]);
-        // Surface instead of silently showing "no times" — a swallowed error
-        // here is exactly what hid the direct-Supabase booking breakage.
-        setSlotsError(e instanceof Error ? e.message : 'Could not load times.');
-        console.warn('[Booking] availability failed:', e);
-      })
-      .finally(() => setSlotsLoading(false));
-  }, [step, activity, selectedDate]);
+    setSelectedClass(null);
+    const onError = (e: unknown, fallback: string) => {
+      setSlotsError(e instanceof Error ? e.message : fallback);
+      console.warn('[Booking] timetable failed:', e);
+    };
+    if (usesClasses) {
+      // Abler caps the range at 31 days; show the next 14 from the chosen date.
+      const end = new Date(selectedDate);
+      end.setDate(end.getDate() + 14);
+      fetchClasses(activity.id, selectedDate, end)
+        .then(setClasses)
+        .catch((e) => {
+          setClasses([]);
+          onError(e, 'Could not load classes.');
+        })
+        .finally(() => setSlotsLoading(false));
+    } else {
+      fetchAvailableSlots(activity.id, selectedDate)
+        .then(setSlots)
+        .catch((e) => {
+          setSlots([]);
+          onError(e, 'Could not load times.');
+        })
+        .finally(() => setSlotsLoading(false));
+    }
+  }, [step, activity, selectedDate, usesClasses]);
+
+  // Disclose the charge on the Confirm step for a chosen slot (best-effort —
+  // the 402 gate is still authoritative). Classes book by eventId, no preview.
+  useEffect(() => {
+    if (step !== 2 || usesClasses || !activity || !selectedSlot) {
+      setPreview(null);
+      return;
+    }
+    let cancelled = false;
+    fetchBookingPreview(activity.id, selectedSlot.startsAt)
+      .then((p) => !cancelled && setPreview(p))
+      .catch(() => !cancelled && setPreview(null));
+    return () => {
+      cancelled = true;
+    };
+  }, [step, usesClasses, activity, selectedSlot]);
 
   if (venueLoading || activitiesLoading) {
     return (
@@ -122,13 +198,13 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
   // reminders, show the success screen. Used by the direct create AND the
   // pay-and-save-card rail.
   function onBookingCreated(bookingId: string) {
-    if (!activity || !venue || !selectedSlot) return;
+    if (!activity || !venue) return;
     idempotencyKey.current = null;
     scheduleBookingReminders({
       bookingId,
       venueName: venue.name,
       activityName: activity.name,
-      bookingTime: selectedSlot.startTime,
+      bookingTime: selectedSlot?.startTime ?? selectedClass?.start ?? new Date(),
     }).catch(() => {}); // non-critical — don't block the success screen
     setConfirmed(true);
   }
@@ -136,18 +212,26 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
   // Create the booking. On a 402 charge_consent_required, disclose the charge
   // and re-POST with consent (same idempotency key) via the `offer` argument.
   // On 402 no_payment_method_on_file (after consent), enter the pay-and-save-
-  // card rail instead of dead-ending.
+  // card rail instead of dead-ending (slot bookings only).
   async function handleConfirm(offer?: ChargeOffer) {
-    if (!selectedSlot || !activity || !venue) return;
-    setConfirming(true);
-    try {
-      if (!idempotencyKey.current) idempotencyKey.current = Crypto.randomUUID();
-      const input: CreateBookingInput = {
+    if (!activity || !venue) return;
+    const consent = offer ? { acceptCharge: true as const, acceptedChargeAmountIsk: offer.amountIsk } : {};
+    let input: CreateBookingInput;
+    if (usesClasses) {
+      if (!selectedClass) return;
+      input = { activityId: activity.id, eventId: selectedClass.eventId, ...consent };
+    } else {
+      if (!selectedSlot) return;
+      input = {
         activityId: activity.id,
         startsAt: selectedSlot.startsAt,
         endsAt: selectedSlot.endsAt,
-        ...(offer ? { acceptCharge: true, acceptedChargeAmountIsk: offer.amountIsk } : {}),
+        ...consent,
       };
+    }
+    setConfirming(true);
+    try {
+      if (!idempotencyKey.current) idempotencyKey.current = Crypto.randomUUID();
       const result = await createBooking(input, idempotencyKey.current);
       onBookingCreated(result.bookingId);
     } catch (e) {
@@ -163,10 +247,21 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
             { text: `Pay ${formatIsk(off.amountIsk)}`, onPress: () => void handleConfirm(off) },
           ],
         );
-      } else if (e instanceof ApiError && e.code === 'no_payment_method_on_file' && offer) {
+      } else if (
+        e instanceof ApiError &&
+        e.code === 'no_payment_method_on_file' &&
+        offer &&
+        !usesClasses
+      ) {
         // No vaulted card — pay the surcharge on Kling's hosted page (which
         // also saves the card), then the booking completes with those funds.
+        // The rail is slot-only; a class keeps the web-profile fallback below.
         await startPayAndSaveCard(offer);
+      } else if (e instanceof ApiError && e.code === 'no_payment_method_on_file') {
+        Alert.alert(
+          'Add a payment method',
+          'This class needs a saved card. Add one at lifepass.is/profile, then try again.',
+        );
       } else {
         // Booking-gate refusals (no plan, boutique membership, caps, dup slot)
         // get friendly copy + a "View plans" CTA instead of the raw code.
@@ -302,11 +397,11 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
       <Header
-        title={STEPS[step]}
+        title={step === 1 && usesClasses ? 'Class' : STEPS[step]}
         onBack={() => (step === 0 ? navigation.goBack() : setStep((step - 1) as 0 | 1 | 2))}
       />
 
-      <StepIndicator step={step} />
+      <StepIndicator step={step} usesClasses={usesClasses} />
 
       {step === 0 && (
         <DateStep selected={selectedDate} onSelect={setSelectedDate} onNext={() => setStep(1)} />
@@ -314,11 +409,15 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
 
       {step === 1 && (
         <TimeStep
+          usesClasses={usesClasses}
           slots={slots}
+          classes={classes}
           loading={slotsLoading}
           error={slotsError}
-          selected={selectedSlot}
-          onSelect={setSelectedSlot}
+          selectedSlot={selectedSlot}
+          selectedClass={selectedClass}
+          onSelectSlot={setSelectedSlot}
+          onSelectClass={setSelectedClass}
           onNext={() => setStep(2)}
         />
       )}
@@ -328,7 +427,10 @@ export default function BookingFlowScreen({ route, navigation }: Props) {
           venue={venue}
           activity={activity}
           date={selectedDate}
+          usesClasses={usesClasses}
           slot={selectedSlot}
+          klass={selectedClass}
+          preview={preview}
           confirming={confirming}
           onConfirm={() => handleConfirm()}
         />
@@ -349,10 +451,11 @@ function Header({ title, onBack }: { title: string; onBack: () => void }) {
   );
 }
 
-function StepIndicator({ step }: { step: 0 | 1 | 2 }) {
+function StepIndicator({ step, usesClasses }: { step: 0 | 1 | 2; usesClasses: boolean }) {
+  const labels = usesClasses ? (['Date', 'Class', 'Confirm'] as const) : STEPS;
   return (
     <View style={styles.steps}>
-      {STEPS.map((label, i) => (
+      {labels.map((label, i) => (
         <View key={label} style={styles.stepWrap}>
           <View style={styles.stepCol}>
             <View style={[styles.stepDot, i <= step && styles.stepDotActive]} />
@@ -491,23 +594,33 @@ function Calendar({ selected, onSelect }: { selected: Date; onSelect: (d: Date) 
 // ─── Step 1 · time ───────────────────────────────────────────────────────────
 
 function TimeStep({
+  usesClasses,
   slots,
+  classes,
   loading,
   error,
-  selected,
-  onSelect,
+  selectedSlot,
+  selectedClass,
+  onSelectSlot,
+  onSelectClass,
   onNext,
 }: {
+  usesClasses: boolean;
   slots: BookingSlot[];
+  classes: ActivityClass[];
   loading: boolean;
   error: string | null;
-  selected: BookingSlot | null;
-  onSelect: (s: BookingSlot) => void;
+  selectedSlot: BookingSlot | null;
+  selectedClass: ActivityClass | null;
+  onSelectSlot: (s: BookingSlot) => void;
+  onSelectClass: (c: ActivityClass) => void;
   onNext: () => void;
 }) {
+  const hasSelection = usesClasses ? selectedClass != null : selectedSlot != null;
+  const empty = usesClasses ? classes.length === 0 : slots.length === 0;
   return (
     <View style={stepStyles.container}>
-      <Text style={stepStyles.heading}>Select a time</Text>
+      <Text style={stepStyles.heading}>{usesClasses ? 'Select a class' : 'Select a time'}</Text>
       {loading ? (
         <View style={styles.center}>
           <ActivityIndicator color={colors.blue} />
@@ -516,19 +629,55 @@ function TimeStep({
         <View style={styles.center}>
           <Text style={styles.errorText}>{error}</Text>
         </View>
-      ) : slots.length === 0 ? (
+      ) : empty ? (
         <View style={styles.center}>
-          <Text style={styles.errorText}>No times available for this date.</Text>
+          <Text style={styles.errorText}>
+            {usesClasses ? 'No classes in the next two weeks.' : 'No times available for this date.'}
+          </Text>
         </View>
+      ) : usesClasses ? (
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={classStyles.list}>
+          {classes.map((klass) => {
+            const active = selectedClass?.eventId === klass.eventId;
+            return (
+              <TouchableOpacity
+                key={klass.eventId}
+                style={[classStyles.row, active && classStyles.rowActive]}
+                onPress={() => onSelectClass(klass)}
+                activeOpacity={0.85}
+                disabled={!klass.bookable}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[classStyles.name, !klass.bookable && timeStyles.timeTextDim]}>
+                    {klass.name ?? 'Class'}
+                  </Text>
+                  <Text style={classStyles.when}>
+                    {klass.start.toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                    {' · '}
+                    {klass.start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false })}
+                  </Text>
+                  {klass.coachNames.length > 0 && (
+                    <Text style={classStyles.coach}>{klass.coachNames}</Text>
+                  )}
+                </View>
+                {!klass.bookable ? (
+                  <Text style={classStyles.full}>{klass.reason ?? 'Full'}</Text>
+                ) : klass.spotsLeft !== undefined ? (
+                  <Text style={classStyles.spots}>{klass.spotsLeft} left</Text>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
       ) : (
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={timeStyles.grid}>
           {slots.map((slot) => {
-            const active = selected?.id === slot.id;
+            const active = selectedSlot?.id === slot.id;
             return (
               <TouchableOpacity
                 key={slot.id}
                 style={[timeStyles.tile, active && timeStyles.tileActive]}
-                onPress={() => onSelect(slot)}
+                onPress={() => onSelectSlot(slot)}
                 activeOpacity={0.85}
                 disabled={!slot.available}
               >
@@ -556,7 +705,7 @@ function TimeStep({
         </ScrollView>
       )}
       <View style={stepStyles.footer}>
-        <PrimaryButton title="Next" onPress={onNext} disabled={!selected} />
+        <PrimaryButton title="Next" onPress={onNext} disabled={!hasSelection} />
       </View>
     </View>
   );
@@ -568,17 +717,24 @@ function ConfirmStep({
   venue,
   activity,
   date,
+  usesClasses,
   slot,
+  klass,
+  preview,
   confirming,
   onConfirm,
 }: {
   venue: Venue;
   activity: Activity;
   date: Date;
+  usesClasses: boolean;
   slot: BookingSlot | null;
+  klass: ActivityClass | null;
+  preview: BookingPreview | null;
   confirming: boolean;
   onConfirm: () => void;
 }) {
+  const charges = preview != null && (preview.kind === 'surcharge' || preview.kind === 'topup');
   return (
     <View style={stepStyles.container}>
       <Text style={stepStyles.heading}>Confirm booking</Text>
@@ -586,26 +742,62 @@ function ConfirmStep({
       <View style={confirmStyles.card}>
         <ConfirmRow label="Venue" value={venue.name} />
         <ConfirmRow label="Activity" value={activity.name} />
-        <ConfirmRow
-          label="Date"
-          value={date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
-        />
-        {slot && (
-          <ConfirmRow
-            label="Time"
-            value={slot.startTime.toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit',
-              hour12: false,
-            })}
-          />
+        {usesClasses && klass ? (
+          <>
+            {klass.name && <ConfirmRow label="Class" value={klass.name} />}
+            <ConfirmRow
+              label="When"
+              value={klass.start.toLocaleString([], {
+                weekday: 'short',
+                day: 'numeric',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}
+            />
+          </>
+        ) : (
+          <>
+            <ConfirmRow
+              label="Date"
+              value={date.toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' })}
+            />
+            {slot && (
+              <ConfirmRow
+                label="Time"
+                value={slot.startTime.toLocaleTimeString([], {
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hour12: false,
+                })}
+              />
+            )}
+            <ConfirmRow label="Duration" value={`${activity.durationMinutes} min`} />
+          </>
         )}
-        <ConfirmRow label="Duration" value={`${activity.durationMinutes} min`} />
       </View>
+
+      {preview && (
+        <View style={[disclosureStyles.note, charges && disclosureStyles.noteCharge]}>
+          <Ionicons
+            name={charges ? 'card-outline' : 'checkmark-circle-outline'}
+            size={14}
+            color={charges ? colors.skyBlue : colors.moss}
+          />
+          <Text style={disclosureStyles.noteText}>{disclosureText(preview)}</Text>
+        </View>
+      )}
 
       <View style={stepStyles.footer}>
         <PrimaryButton
-          title={confirming ? 'Confirming…' : 'Confirm booking'}
+          title={
+            confirming
+              ? 'Confirming…'
+              : charges && preview?.priceIsk != null
+                ? `Confirm & pay ${formatIsk(preview.priceIsk)}`
+                : 'Confirm booking'
+          }
           onPress={onConfirm}
           loading={confirming}
         />
@@ -777,6 +969,43 @@ const timeStyles = StyleSheet.create({
   timeTextDim: { color: colors.line2 },
   spots: { fontSize: 10, color: colors.paper3 },
   spotsActive: { color: colors.paper2 },
+});
+
+const classStyles = StyleSheet.create({
+  list: { gap: 10, paddingBottom: 20 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: colors.ink2,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  rowActive: { backgroundColor: colors.blueWash, borderColor: colors.blue },
+  name: { fontSize: 14, fontWeight: '600', color: colors.paper, letterSpacing: -0.2 },
+  when: { fontSize: 12, color: colors.paper3, marginTop: 2 },
+  coach: { fontSize: 11, color: colors.paper3, marginTop: 2 },
+  spots: { fontSize: 11, color: colors.paper3 },
+  full: { fontSize: 10, fontWeight: '700', color: colors.paper3 },
+});
+
+const disclosureStyles = StyleSheet.create({
+  note: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 10,
+    backgroundColor: colors.ink2,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+  },
+  noteCharge: { borderColor: colors.blue },
+  noteText: { flex: 1, fontSize: 12, color: colors.paper2, lineHeight: 17 },
 });
 
 const confirmStyles = StyleSheet.create({
