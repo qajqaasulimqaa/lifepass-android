@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import WaveIcon from '../../components/WaveIcon';
 import PricePill from '../../components/PricePill';
-import { colors } from '../../theme';
+import { colors } from './coachTheme';
 import type { VenueCard } from '../../types/coach';
 
 const H_PAD   = 16;   // left/right padding of the scroll view
@@ -120,7 +120,7 @@ export default function VenueCarouselMessage({
       {/* Intro bubble */}
       <View style={styles.introRow}>
         <View style={styles.avatar}>
-          <WaveIcon size={12} color={colors.skyBlue} />
+          <WaveIcon size={12} color={colors.paper} />
         </View>
         <View style={styles.introBubble}>
           <Text style={styles.introText}>{intro}</Text>
@@ -176,7 +176,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(168,216,240,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -187,13 +187,14 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 16,
     borderTopLeftRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    // Opaque near-white so the AI's (dark) intro text stays readable.
+    backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(15,23,42,0.06)',
   },
   introText: {
     fontSize: 13,
-    color: colors.paper,
+    color: colors.ink,
     lineHeight: 19,
   },
 
@@ -211,11 +212,11 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 3,
-    backgroundColor: 'rgba(168,216,240,0.22)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
   },
   dotActive: {
     width: 14,
-    backgroundColor: colors.skyBlue,
+    backgroundColor: colors.paper,
   },
 });
 
@@ -235,7 +236,7 @@ const card = StyleSheet.create({
     position: 'absolute',
     top: 8,
     left: 8,
-    backgroundColor: 'rgba(8,14,30,0.72)',
+    backgroundColor: 'rgba(26,22,18,0.72)',
     borderRadius: 999,
     paddingHorizontal: 7,
     paddingVertical: 3,
@@ -244,7 +245,7 @@ const card = StyleSheet.create({
   categoryText: {
     fontSize: 9,
     fontWeight: '700',
-    color: colors.skyBlue,
+    color: colors.paper,
     letterSpacing: 0.5,
   },
 

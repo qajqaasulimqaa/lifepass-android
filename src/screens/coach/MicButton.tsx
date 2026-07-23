@@ -12,7 +12,7 @@ import {
   ExpoSpeechRecognitionModule,
   useSpeechRecognitionEvent,
 } from 'expo-speech-recognition';
-import { colors } from '../../theme';
+import { colors } from './coachTheme';
 
 type Props = {
   /** Called with the (growing) transcript as the user speaks. */
@@ -69,7 +69,7 @@ export default function MicButton({ onTranscript }: Props) {
       <Ionicons
         name={listening ? 'mic' : 'mic-outline'}
         size={22}
-        color={listening ? colors.skyBlue : 'rgba(255,255,255,0.55)'}
+        color={listening ? '#F5F1EA' : 'rgba(255,255,255,0.55)'}
       />
     </TouchableOpacity>
   );
@@ -84,8 +84,8 @@ const styles = StyleSheet.create({
     borderRadius: 21,
   },
   micActive: {
-    backgroundColor: 'rgba(168,216,240,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.12)',
     borderWidth: 1,
-    borderColor: 'rgba(168,216,240,0.35)',
+    borderColor: 'rgba(255,255,255,0.28)',
   },
 });

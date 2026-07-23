@@ -17,7 +17,8 @@ type Props = {
 // CreditPill on venue UI now that the credit wallet is gone backend-side.
 export default function PricePill({ venue, compact = false }: Props) {
   const premium = isPremium(venue);
-  const tint = premium ? colors.skyBlue : colors.moss;
+  // Premium venues → glacier accent; in-bundle "Included" → brand blue.
+  const tint = premium ? colors.skyBlue : colors.blue;
   return (
     <View
       style={[

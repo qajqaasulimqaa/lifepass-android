@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import Kicker from '../../components/Kicker';
 import PrimaryButton from '../../components/PrimaryButton';
 import KenniVerificationModal from '../../components/KenniVerificationModal';
@@ -380,8 +380,8 @@ const cardStyles = StyleSheet.create({
     overflow: 'visible',
   },
   cardPopular: {
-    backgroundColor: 'rgba(0,136,255,0.07)',
-    borderColor: 'rgba(0,136,255,0.28)',
+    backgroundColor: 'rgba(63,121,186,0.07)',
+    borderColor: 'rgba(63,121,186,0.28)',
   },
   cardSelected: {
     borderColor: colors.blue,
@@ -409,6 +409,7 @@ const cardStyles = StyleSheet.create({
   },
   nameBlock: { flex: 1, gap: 2 },
   letter: {
+    fontFamily: fonts.serif,
     fontSize: 34,
     fontWeight: '300',
     color: colors.paper,
@@ -449,6 +450,7 @@ const styles = StyleSheet.create({
   headline: { gap: 12, paddingTop: 4 },
   headlineTitleBlock: { gap: 2 },
   headlineBig: {
+    fontFamily: fonts.serif,
     fontSize: 46,
     fontWeight: '300',
     color: colors.paper,
@@ -456,6 +458,7 @@ const styles = StyleSheet.create({
     lineHeight: 52,
   },
   headlineSmall: {
+    fontFamily: fonts.serifItalic,
     fontSize: 28,
     fontWeight: '300',
     fontStyle: 'italic',

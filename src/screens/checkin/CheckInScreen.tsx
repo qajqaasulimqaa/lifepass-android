@@ -5,7 +5,7 @@ import { useRoute, useNavigation, type RouteProp } from '@react-navigation/nativ
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
 import { useSubscription } from '../../supabase/hooks/useSubscription';
@@ -427,7 +427,7 @@ const idleStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  heroTitle: { fontSize: 24, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  heroTitle: { fontFamily: fonts.serif, fontSize: 24, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   heroBody: { fontSize: 13, color: colors.paper3, textAlign: 'center', lineHeight: 19 },
   permissionCard: {
     flexDirection: 'row',
@@ -473,7 +473,7 @@ const successStyles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'rgba(168,216,240,0.4)',
   },
-  title: { fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
+  title: { fontFamily: fonts.serif, fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
   venue: { fontSize: 16, color: colors.paper2, textAlign: 'center', marginBottom: 4 },
   divider: { height: 0.5, alignSelf: 'stretch', backgroundColor: colors.line, marginVertical: 16 },
   creditsRow: {

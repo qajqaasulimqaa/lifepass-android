@@ -16,7 +16,7 @@ import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import { useLocation } from '../../hooks/useLocation';
 import { haversineMeters, REYKJAVIK_CENTRE } from '../../lib/geo';
@@ -160,21 +160,26 @@ export default function HomeScreen() {
           <View style={[styles.heroImage, { backgroundColor: colors.ink2 }]} />
         )}
 
+        {/* Scrim: a warm near-black (not navy — keeps a neutral, editorial cast
+            on the photo instead of a blue hue). Clear through the top so the
+            image reads naturally, darker behind the hero text, then fades into
+            the cream page colour so the hero blends into the content below. */}
         <LinearGradient
           colors={[
-            'rgba(15,23,42,0.35)',
-            'rgba(15,23,42,0.05)',
-            'rgba(15,23,42,0.60)',
-            'rgba(15,23,42,1.0)',
+            'rgba(26,22,18,0.18)',
+            'rgba(26,22,18,0.0)',
+            'rgba(26,22,18,0.30)',
+            'rgba(26,22,18,0.72)',
+            colors.ink,
           ]}
-          locations={[0, 0.3, 0.7, 1.0]}
+          locations={[0, 0.30, 0.60, 0.82, 1.0]}
           style={StyleSheet.absoluteFill}
         />
 
         <View style={[styles.heroInner, { paddingTop: insets.top + 12 }]}>
           {/* Top bar */}
           <View style={styles.topBar}>
-            <Wordmark height={20} />
+            <Wordmark height={20} color={HERO_TEXT} />
 
             <View style={styles.topBarRight}>
               <TouchableOpacity style={styles.avatar} onPress={openAccount}>
@@ -188,7 +193,7 @@ export default function HomeScreen() {
             {/* Real weather row — replaces the old static tagline */}
             {weather && (
               <View style={styles.weatherRow}>
-                <Ionicons name={weather.icon} size={13} color={colors.paper2} />
+                <Ionicons name={weather.icon} size={13} color={HERO_TEXT_2} />
                 <Text style={styles.weatherText}>
                   {weather.condition} · {weather.temperature}° · {weatherRecommendation(weather)}
                 </Text>
@@ -209,7 +214,7 @@ export default function HomeScreen() {
                 />
               ) : (
                 <View style={styles.pickupIconTile}>
-                  <Ionicons name="calendar-outline" size={24} color={colors.paper3} />
+                  <Ionicons name="calendar-outline" size={24} color={HERO_TEXT_3} />
                 </View>
               )}
               <View style={styles.pickupText}>
@@ -401,14 +406,16 @@ const trySection = StyleSheet.create({
     gap: 16,
   },
   heading: {
+    fontFamily: fonts.serif,
     fontSize: 26,
     fontWeight: '400',
     color: colors.paper,
     letterSpacing: -0.4,
     textAlign: 'center',
   },
+  // "something new?" — upright Fraunces (no italic), matching the heading.
   italic: {
-    fontStyle: 'italic',
+    fontFamily: fonts.serif,
     color: colors.paper,
   },
   scrollContent: {
@@ -486,6 +493,13 @@ const askCard = StyleSheet.create({
   },
 });
 
+// The hero sits on a dark photo + gradient scrim, so its overlaid text/glass
+// stays light regardless of the app's light editorial theme (the shelves below
+// the hero use the normal dark-ink-on-paper tokens).
+const HERO_TEXT = '#F1F5F9';
+const HERO_TEXT_2 = 'rgba(241,245,249,0.72)';
+const HERO_TEXT_3 = 'rgba(241,245,249,0.48)';
+
 const styles = StyleSheet.create({
   scroll: { flex: 1, backgroundColor: colors.ink },
   content: { flexGrow: 1 },
@@ -504,32 +518,33 @@ const styles = StyleSheet.create({
   topBarRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: {
     width: 38, height: 38, borderRadius: 19,
-    // Frosted glass.
-    backgroundColor: 'rgba(20, 33, 57, 0.55)',
+    // Frosted glass over the dark hero (warm neutral, not navy).
+    backgroundColor: 'rgba(26, 22, 18, 0.42)',
     alignItems: 'center', justifyContent: 'center',
     borderWidth: 0.5, borderColor: 'rgba(255, 255, 255, 0.18)',
   },
-  avatarInitial: { fontSize: 15, fontWeight: '600', color: colors.paper, fontStyle: 'italic' },
-  editorial: { paddingBottom: 28, gap: 14 },
+  avatarInitial: { fontSize: 15, fontWeight: '600', color: HERO_TEXT, fontStyle: 'italic' },
+  editorial: { paddingBottom: 52, gap: 14 },
   weatherRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   weatherText: {
     fontSize: 11,
     fontWeight: '600',
-    color: colors.paper2,
+    color: HERO_TEXT_2,
     letterSpacing: 1.0,
   },
   greetingText: {
-    fontSize: 36, fontWeight: '400', color: colors.paper,
+    fontFamily: fonts.serif,
+    fontSize: 36, fontWeight: '400', color: HERO_TEXT,
     letterSpacing: -1.2, lineHeight: 44,
   },
-  greetingName: { color: colors.paper, fontStyle: 'italic' },
+  greetingName: { fontFamily: fonts.serifItalic, color: HERO_TEXT, fontStyle: 'italic' },
   // Pickup card — glass section with thumbnail + venue info + book button.
   pickupCard: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
     padding: 10,
-    backgroundColor: 'rgba(20, 33, 57, 0.55)',
+    backgroundColor: 'rgba(26, 22, 18, 0.42)',
     borderRadius: 16,
     borderWidth: 0.5,
     borderColor: 'rgba(255, 255, 255, 0.15)',
@@ -542,7 +557,7 @@ const styles = StyleSheet.create({
   pickupIconTile: {
     width: 60, height: 60,
     borderRadius: 12,
-    backgroundColor: colors.ink3,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -550,7 +565,7 @@ const styles = StyleSheet.create({
   pickupKicker: {
     fontSize: 9,
     fontWeight: '700',
-    color: colors.paper3,
+    color: HERO_TEXT_3,
     letterSpacing: 1.0,
     marginBottom: 2,
   },
@@ -558,21 +573,20 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '500',
     fontStyle: 'italic',
-    color: colors.paper,
+    color: HERO_TEXT,
     letterSpacing: -0.3,
   },
   pickupSub: {
     fontSize: 12,
-    color: colors.paper2,
+    color: HERO_TEXT_2,
   },
   bookButton: {
-    backgroundColor: 'rgba(0, 136, 255, 0.55)',
+    // #3F79BA at 50% — a soft light-blue pill on the dark UPCOMING card.
+    backgroundColor: 'rgba(63,121,186,0.5)',
     borderRadius: 999,
     paddingHorizontal: 16,
     height: 40,
     alignItems: 'center', justifyContent: 'center',
-    borderWidth: 0.5,
-    borderColor: 'rgba(168, 216, 240, 0.35)',
   },
   bookButtonText: { fontSize: 13, fontWeight: '600', color: '#FFFFFF' },
   loadingContainer: {
@@ -586,6 +600,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between', paddingHorizontal: 24,
   },
   shelfTitle: {
+    fontFamily: fonts.serif,
     fontSize: 22, fontWeight: '400', color: colors.paper,
     letterSpacing: -0.4, marginTop: 4,
   },

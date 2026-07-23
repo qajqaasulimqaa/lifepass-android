@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { View, Text, Modal, Pressable, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../theme';
+import { colors, fonts } from '../theme';
 import PrimaryButton from './PrimaryButton';
 import { runKenniVerification } from '../supabase/services/kenni';
 
@@ -120,7 +120,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 4,
   },
-  title: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  title: { fontFamily: fonts.serif, fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   body: {
     fontSize: 15,
     color: colors.paper3,

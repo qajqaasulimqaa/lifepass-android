@@ -8,7 +8,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import WaveIcon from '../../components/WaveIcon';
-import { colors } from '../../theme';
+import { colors } from './coachTheme';
 import type { QuestionOption } from '../../types/coach';
 
 type Props = {
@@ -40,7 +40,7 @@ export default function QuestionBubbleMessage({
       {/* Question bubble */}
       <View style={styles.row}>
         <View style={styles.avatar}>
-          <WaveIcon size={12} color={colors.skyBlue} />
+          <WaveIcon size={12} color={colors.paper} />
         </View>
         <View style={styles.bubble}>
           <Text style={styles.questionText}>{question}</Text>
@@ -82,7 +82,7 @@ export default function QuestionBubbleMessage({
                       onPress={submitOther}
                       activeOpacity={0.8}
                     >
-                      <Ionicons name="arrow-forward" size={14} color="#fff" />
+                      <Ionicons name="arrow-forward" size={14} color={colors.ink} />
                     </TouchableOpacity>
                   </View>
                 )}
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: 'rgba(168,216,240,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -145,13 +145,14 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 16,
     borderTopLeftRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    // Opaque near-white so the AI's (dark) question text stays readable.
+    backgroundColor: 'rgba(255,255,255,0.94)',
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(15,23,42,0.06)',
   },
   questionText: {
     fontSize: 14,
-    color: colors.paper,
+    color: colors.ink,
     lineHeight: 20,
   },
 
@@ -171,8 +172,8 @@ const styles = StyleSheet.create({
     borderColor: colors.line2,
   },
   chipSelected: {
-    backgroundColor: colors.blue,
-    borderColor: colors.blue,
+    backgroundColor: colors.paper,
+    borderColor: colors.paper,
   },
   chipDimmed: {
     opacity: 0.35,
@@ -183,7 +184,7 @@ const styles = StyleSheet.create({
     color: colors.paper,
   },
   chipTextSelected: {
-    color: '#fff',
+    color: colors.ink,
     fontWeight: '600',
   },
   chipTextDimmed: {
@@ -213,7 +214,7 @@ const styles = StyleSheet.create({
     width: 28,
     height: 28,
     borderRadius: 14,
-    backgroundColor: colors.blue,
+    backgroundColor: colors.paper,
     alignItems: 'center',
     justifyContent: 'center',
   },

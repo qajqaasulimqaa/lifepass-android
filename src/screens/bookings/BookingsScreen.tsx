@@ -12,7 +12,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation, useRoute, useFocusEffect, type RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { useBookings } from '../../supabase/hooks/useBookings';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import { useVenues } from '../../supabase/hooks/useVenues';
@@ -504,7 +504,7 @@ const styles = StyleSheet.create({
   divider: { height: 0.5, backgroundColor: colors.line, marginHorizontal: 20 },
 
   savedHeader: { gap: 4, paddingHorizontal: 4 },
-  savedHeading: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  savedHeading: { fontFamily: fonts.serif, fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   section: { gap: 12 },
 });
 
@@ -608,7 +608,7 @@ const suggestStyles = StyleSheet.create({
     gap: 14,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  heading: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  heading: { fontFamily: fonts.serif, fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   list: { gap: 12 },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   image: { width: 48, height: 48, borderRadius: 8 },

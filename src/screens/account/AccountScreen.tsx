@@ -171,7 +171,7 @@ export default function AccountScreen() {
         {/* ── Member card ── */}
         <View style={memberCard.glowShell}>
           <LinearGradient
-            colors={['rgba(0,136,255,0.85)', 'rgba(168,216,240,0.55)', 'rgba(58,161,255,0.3)']}
+            colors={['rgba(63,121,186,0.85)', 'rgba(168,216,240,0.55)', 'rgba(98,149,206,0.3)']}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={memberCard.gradientBorder}
@@ -486,7 +486,7 @@ const memberCard = StyleSheet.create({
     width: 62,
     height: 62,
     borderRadius: 31,
-    backgroundColor: colors.moss,
+    backgroundColor: colors.blue,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,

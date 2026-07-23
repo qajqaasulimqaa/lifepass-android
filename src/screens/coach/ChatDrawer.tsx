@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { colors } from '../../theme';
+import { colors } from './coachTheme';
 import Wordmark from '../../components/Wordmark';
 import type { RecentChat } from '../../data/mockCoach';
 
@@ -107,7 +107,7 @@ export default function ChatDrawer({
       >
         {/* LifePass logo */}
         <View style={styles.logoRow}>
-          <Wordmark height={20} />
+          <Wordmark height={20} color={colors.paper} />
         </View>
 
         {/* Primary nav */}

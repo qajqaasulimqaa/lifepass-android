@@ -20,10 +20,11 @@ export default function NearbyVenueCard({ venue, distanceMeters }: Props) {
     <View style={styles.card}>
       <View style={styles.imageWrapper}>
         <Image source={{ uri: venue.imageUrl }} style={styles.image} />
-        {/* "Included" / "from ISK X" marker — same overlay as the iOS card */}
+        {/* "Included" / "from ISK X" marker — sits on a dark pill over the
+            photo, so it keeps the light accent tints. */}
         <View style={styles.priceBadge}>
           <Text
-            style={[styles.priceText, { color: isPremium(venue) ? colors.skyBlue : colors.moss }]}
+            style={[styles.priceText, { color: isPremium(venue) ? '#A8D8F0' : colors.blueMid }]}
           >
             {priceLabel(venue)}
           </Text>

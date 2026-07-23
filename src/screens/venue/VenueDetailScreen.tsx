@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { useVenueById, useActivities, useVenueReviews } from '../../supabase/hooks/useVenues';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import Kicker from '../../components/Kicker';
@@ -137,7 +137,7 @@ function HeroBlock({
           'rgba(15,23,42,0.35)',
           'rgba(15,23,42,0.05)',
           'rgba(15,23,42,0.70)',
-          colors.ink,
+          'rgba(15,23,42,0.95)',
         ]}
         locations={[0, 0.35, 0.85, 1.0]}
         style={StyleSheet.absoluteFill}
@@ -149,7 +149,7 @@ function HeroBlock({
         <View style={heroStyles.topNavRight}>
           <FrostedButton
             icon={isFavourite ? 'heart' : 'heart-outline'}
-            tint={isFavourite ? colors.blueMid : colors.paper}
+            tint={isFavourite ? colors.blueMid : HERO_TEXT}
             onPress={onToggleFavourite}
           />
           <FrostedButton icon="share-outline" onPress={() => {}} />
@@ -166,7 +166,7 @@ function HeroBlock({
                 ? priceLabel(venue)
                 : 'In your plan'
           }
-          color={isPremium(venue) ? colors.skyBlue : colors.paper2}
+          color={isPremium(venue) ? HERO_SKY : HERO_TEXT_2}
         />
         <Text style={heroStyles.name}>{venue.name}</Text>
         <Text style={heroStyles.city}>{venue.city}</Text>
@@ -177,7 +177,7 @@ function HeroBlock({
 
 function FrostedButton({
   icon,
-  tint = colors.paper,
+  tint = HERO_TEXT,
   onPress,
 }: {
   icon: keyof typeof Ionicons.glyphMap;
@@ -565,6 +565,7 @@ const styles = StyleSheet.create({
   section: { gap: 14 },
   sectionTitle: { gap: 4 },
   sectionTitleText: {
+    fontFamily: fonts.serif,
     fontSize: 22,
     fontWeight: '400',
     color: colors.paper,
@@ -572,6 +573,12 @@ const styles = StyleSheet.create({
   },
   activitiesList: { gap: 10 },
 });
+
+// The hero image + scrim is dark, so its title/chrome stays light even though
+// the rest of the screen uses dark-ink-on-paper.
+const HERO_TEXT = '#F1F5F9';
+const HERO_TEXT_2 = 'rgba(241,245,249,0.72)';
+const HERO_SKY = '#A8D8F0';
 
 const heroStyles = StyleSheet.create({
   container: { height: HERO_HEIGHT, width: SCREEN_WIDTH },
@@ -600,15 +607,17 @@ const heroStyles = StyleSheet.create({
     gap: 8,
   },
   name: {
+    fontFamily: fonts.serif,
     fontSize: 38,
     fontWeight: '400',
-    color: colors.paper,
+    color: HERO_TEXT,
     letterSpacing: -1.2,
   },
   city: {
+    fontFamily: fonts.serifItalic,
     fontSize: 20,
     fontStyle: 'italic',
-    color: colors.paper2,
+    color: HERO_TEXT_2,
   },
 });
 
@@ -647,7 +656,7 @@ const cardStyles = StyleSheet.create({
     padding: 24,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: 'rgba(0,136,255,0.35)',
+    borderColor: 'rgba(63,121,186,0.35)',
     alignItems: 'center',
     gap: 14,
   },
@@ -659,6 +668,7 @@ const cardStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   heading: {
+    fontFamily: fonts.serif,
     fontSize: 20,
     fontWeight: '400',
     color: colors.paper,
