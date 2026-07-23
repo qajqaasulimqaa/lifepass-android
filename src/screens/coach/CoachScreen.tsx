@@ -16,10 +16,12 @@ import {
   Dimensions,
 } from 'react-native';
 import * as Location from 'expo-location';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation, type RouteProp } from '@react-navigation/native';
-import { colors } from '../../theme';
+import { colors } from './coachTheme';
+import { fonts } from '../../theme';
 import WaveIcon from '../../components/WaveIcon';
 import Wordmark from '../../components/Wordmark';
 import {
@@ -637,8 +639,21 @@ export default function CoachScreen() {
         style={styles.bg}
         resizeMode="cover"
       >
-        <View style={styles.overlayTop} />
-        <View style={styles.overlayBottom} />
+        {/* Light neutral scrim: darkens only the top (heading + status bar) and
+            the very bottom (input bar) for legibility, and stays nearly clear
+            through the middle so the Seljavallalaug photo reads as the backdrop.
+            Neutral (not tinted) so it doesn't fight the photo's cool tones. */}
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            'rgba(0,0,0,0.45)',
+            'rgba(0,0,0,0.10)',
+            'rgba(0,0,0,0.14)',
+            'rgba(0,0,0,0.52)',
+          ]}
+          locations={[0, 0.26, 0.72, 1]}
+          style={StyleSheet.absoluteFill}
+        />
 
         {/* ── Top bar ── */}
         <View style={[styles.topBar, { paddingTop: insets.top + 12 }]}>
@@ -651,7 +666,7 @@ export default function CoachScreen() {
             <Ionicons name="menu-outline" size={26} color="#FFFFFF" />
           </TouchableOpacity>
 
-          <Wordmark height={17} />
+          <Wordmark height={17} color={colors.paper} />
           <View style={{ width: 42 }} />
         </View>
 
@@ -719,35 +734,38 @@ export default function CoachScreen() {
               styles.inputBar,
               keyboardHeight > 0 && Platform.OS === 'android'
                 ? { position: 'absolute', left: 0, right: 0, bottom: keyboardHeight + 8 }
-                : { paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 84 },
+                : { paddingBottom: keyboardHeight > 0 ? 8 : insets.bottom + 94 },
             ]}
           >
-            <TextInput
-              value={input}
-              onChangeText={setInput}
-              placeholder="Feeling stuck? Let me help!"
-              placeholderTextColor="rgba(255,255,255,0.40)"
-              style={styles.input}
-              multiline
-              onSubmitEditing={() => send(input)}
-              blurOnSubmit={false}
-              selectionColor={colors.blue}
-              underlineColorAndroid="transparent"
-            />
-            {input.trim() ? (
-              <TouchableOpacity
-                style={styles.sendButton}
-                onPress={() => send(input)}
-                disabled={isTyping}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="arrow-up" size={18} color="#FFFFFF" />
-              </TouchableOpacity>
-            ) : MicButton ? (
-              // Voice dictation — only present in dev/production builds (hidden
-              // in Expo Go, where the speech native module isn't available).
-              <MicButton onTranscript={setInput} />
-            ) : null}
+            {/* Send/mic live inside the input pill (trailing). */}
+            <View style={styles.inputPill}>
+              <TextInput
+                value={input}
+                onChangeText={setInput}
+                placeholder="Feeling stuck? Let me help!"
+                placeholderTextColor="rgba(255,255,255,0.40)"
+                style={styles.input}
+                multiline
+                onSubmitEditing={() => send(input)}
+                blurOnSubmit={false}
+                selectionColor={colors.blue}
+                underlineColorAndroid="transparent"
+              />
+              {input.trim() ? (
+                <TouchableOpacity
+                  style={styles.sendButton}
+                  onPress={() => send(input)}
+                  disabled={isTyping}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="arrow-up" size={18} color={colors.ink} />
+                </TouchableOpacity>
+              ) : MicButton ? (
+                // Voice dictation — only present in dev/production builds (hidden
+                // in Expo Go, where the speech native module isn't available).
+                <MicButton onTranscript={setInput} />
+              ) : null}
+            </View>
           </View>
         </View>
       </ImageBackground>
@@ -778,7 +796,7 @@ function MessageBubble({ message }: { message: ChatMessage }) {
     <View style={[bubble.row, isUser && bubble.rowUser]}>
       {!isUser && (
         <View style={bubble.avatar}>
-          <WaveIcon size={13} color={colors.skyBlue} />
+          <WaveIcon size={13} color={colors.paper} />
         </View>
       )}
       <View style={[bubble.wrap, isUser ? bubble.wrapUser : bubble.wrapAssistant]}>
@@ -794,7 +812,7 @@ function TypingIndicator() {
   return (
     <View style={bubble.row}>
       <View style={bubble.avatar}>
-        <WaveIcon size={13} color={colors.skyBlue} />
+        <WaveIcon size={13} color={colors.paper} />
       </View>
       <View style={[bubble.wrap, bubble.wrapAssistant, bubble.typing]}>
         <View style={bubble.dot} />
@@ -810,18 +828,6 @@ function TypingIndicator() {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.ink },
   bg: { flex: 1 },
-
-  overlayTop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(8,14,30,0.42)',
-    bottom: '40%',
-  },
-  overlayBottom: {
-    position: 'absolute',
-    left: 0, right: 0, bottom: 0,
-    top: '50%',
-    backgroundColor: 'rgba(8,14,30,0.78)',
-  },
 
   topBar: {
     flexDirection: 'row',
@@ -849,6 +855,7 @@ const styles = StyleSheet.create({
     marginBottom:160,
   },
   heading: {
+    fontFamily: fonts.serif,
     fontSize: 36,
     fontWeight: '400',
     color: '#FFFFFF',
@@ -861,27 +868,31 @@ const styles = StyleSheet.create({
   chatListContent: { paddingTop: 20, paddingHorizontal: 16, paddingBottom: 20, gap: 14 },
 
   inputBar: {
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 10,
     paddingHorizontal: 16,
+  },
+  // The pill wraps the text field + the trailing send/mic button.
+  inputPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(26,22,18,0.82)',
+    borderRadius: 26,
+    borderWidth: 0.8,
+    borderColor: 'rgba(255,255,255,0.22)',
+    paddingLeft: 18,
+    paddingRight: 6,
   },
   input: {
     flex: 1,
     maxHeight: 120,
-    paddingHorizontal: 18,
-    paddingVertical: 11,
-    backgroundColor: 'rgba(10,20,45,0.88)',
-    borderRadius: 26,
-    borderWidth: 0.8,
-    borderColor: 'rgba(255,255,255,0.22)',
+    paddingVertical: 12,
     fontSize: 15,
     color: '#FFFFFF',
   },
   sendButton: {
     width: 42, height: 42,
     borderRadius: 21,
-    backgroundColor: colors.blue,
+    // Warm paper button with ink icon — matches the app's editorial CTAs.
+    backgroundColor: colors.paper,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -902,11 +913,15 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink3,
   },
   categoryLabel: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: colors.paper2,
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 13,
+    lineHeight: 17,
+    // Sits directly on the photo — a soft shadow keeps it crisp anywhere.
+    textShadowColor: 'rgba(0,0,0,0.5)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
   categoryStripRow: {
     flexDirection: 'row',
@@ -927,7 +942,7 @@ const bubble = StyleSheet.create({
   avatar: {
     width: 26, height: 26,
     borderRadius: 13,
-    backgroundColor: 'rgba(168,216,240,0.15)',
+    backgroundColor: 'rgba(255,255,255,0.14)',
     alignItems: 'center',
     justifyContent: 'center',
     flexShrink: 0,
@@ -939,17 +954,19 @@ const bubble = StyleSheet.create({
     borderRadius: 18,
   },
   wrapAssistant: {
-    backgroundColor: 'rgba(255,255,255,0.09)',
+    // Opaque near-white so the AI's (dark) text stays readable over the photo.
+    backgroundColor: 'rgba(255,255,255,0.94)',
     borderTopLeftRadius: 4,
     borderWidth: 0.5,
-    borderColor: 'rgba(255,255,255,0.13)',
+    borderColor: 'rgba(15,23,42,0.06)',
   },
   wrapUser: {
-    backgroundColor: colors.blue,
+    // Warm paper bubble with ink text (was bright blue).
+    backgroundColor: colors.paper,
     borderTopRightRadius: 4,
   },
-  text: { fontSize: 14, color: colors.paper, lineHeight: 20 },
-  textUser: { color: '#FFFFFF' },
+  text: { fontSize: 14, color: colors.ink, lineHeight: 20 },
+  textUser: { color: colors.ink },
   typing: {
     flexDirection: 'row',
     alignItems: 'center',

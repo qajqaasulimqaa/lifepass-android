@@ -18,7 +18,7 @@ import { Video, ResizeMode } from 'expo-av';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExploreStackParamList } from '../../navigation/types';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { useVenues } from '../../supabase/hooks/useVenues';
 import {
   categoryFilters,
@@ -637,7 +637,7 @@ function EditorialBanner() {
         style={StyleSheet.absoluteFill}
       />
       <View style={bannerStyles.copy}>
-        <Kicker text="Feel Great Everyday" color={colors.skyBlue} />
+        <Kicker text="Feel Great Everyday" color="#A8D8F0" />
         <Text style={bannerStyles.title}>
           Gym, Spa, Pool, Lagoon-{' '}
           <Text style={bannerStyles.italic}> all at one pass</Text>
@@ -769,8 +769,9 @@ const bannerStyles = StyleSheet.create({
   container: { height: 180, borderRadius: 16, overflow: 'hidden', marginBottom: 16, justifyContent: 'flex-end' },
   image: { ...StyleSheet.absoluteFillObject },
   copy: { padding: 16, gap: 4 },
-  title: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
-  italic: { fontStyle: 'italic' },
+  // Sits over the dark hero video, so the title stays light.
+  title: { fontFamily: fonts.serif, fontSize: 22, fontWeight: '400', color: '#F1F5F9', letterSpacing: -0.4 },
+  italic: { fontFamily: fonts.serifItalic, fontStyle: 'italic' },
 });
 
 const rowStyles = StyleSheet.create({

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { signUp, signIn } from '../../supabase/services/auth';
 import AuthField from '../../components/AuthField';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   scroll: { paddingHorizontal: 24, gap: 24, paddingTop: 16 },
   header: { gap: 8, alignItems: 'center' },
-  title: { fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
+  title: { fontFamily: fonts.serif, fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
   subtitle: { fontSize: 14, color: colors.paper3 },
   fields: { gap: 14 },
   error: { fontSize: 13, color: colors.destructive, textAlign: 'center' },
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
 
   // Email confirmation screen
   confirmCenter: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 16 },
-  confirmTitle: { fontSize: 24, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  confirmTitle: { fontFamily: fonts.serif, fontSize: 24, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   confirmBody: { fontSize: 15, color: colors.paper3, textAlign: 'center', lineHeight: 22 },
   confirmErrorText: { fontSize: 13, color: colors.destructive, textAlign: 'center' },
   confirmActions: { alignSelf: 'stretch', gap: 8, marginTop: 8 },

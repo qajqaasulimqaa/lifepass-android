@@ -12,8 +12,8 @@ type TabConfig = {
   label: string;
   /** Standard Ionicons name. If omitted, renderIcon must be provided. */
   icon?: keyof typeof Ionicons.glyphMap;
-  /** Custom icon renderer — receives (color, size, isActive) */
-  renderIcon?: (color: string, size: number, isActive: boolean) => React.ReactNode;
+  /** Custom icon renderer — receives (color, size, isActive, thick) */
+  renderIcon?: (color: string, size: number, isActive: boolean, thick: boolean) => React.ReactNode;
 };
 
 const LEFT_TABS: TabConfig[] = [
@@ -25,15 +25,15 @@ const RIGHT_TABS: TabConfig[] = [
   {
     routeName: 'Coach',
     label: 'Coach',
-    renderIcon: (color, size, isActive) => (
-      <WaveIcon size={size} color={color} strokeWidth={isActive ? 2.2 : 1.5} />
+    renderIcon: (color, size, isActive, thick) => (
+      <WaveIcon size={size} color={color} strokeWidth={thick ? 2.6 : isActive ? 2.2 : 1.5} />
     ),
   },
   {
     routeName: 'Bookings',
     label: 'Profile',
-    renderIcon: (color, size, isActive) => (
-      <ProfileIcon size={size} color={color} strokeWidth={isActive ? 2.2 : 1.5} />
+    renderIcon: (color, size, isActive, thick) => (
+      <ProfileIcon size={size} color={color} strokeWidth={thick ? 2.6 : isActive ? 2.2 : 1.5} />
     ),
   },
 ];
@@ -55,6 +55,11 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
   const activeRoute = state.routes[state.index].name;
 
+  // The Coach screen is a full-bleed photo; there the bar goes transparent so
+  // the image runs to the edge, and the icons/labels turn bold white to stay
+  // legible on it (the Coach screen's own bottom scrim provides the contrast).
+  const coachMode = activeRoute === 'Coach';
+
   if (HIDDEN_ON_ROUTES.includes(focusedChildRoute(state) ?? '')) return null;
 
   function navigateTo(routeName: string) {
@@ -66,19 +71,20 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
       pointerEvents="box-none"
       style={[styles.container, { paddingBottom: insets.bottom }]}
     >
-      <LinearGradient
-        pointerEvents="none"
-        colors={[
-          'rgba(15,23,42,0.0)',
-          'rgba(15,23,42,0.60)',
-          'rgba(15,23,42,0.92)',
-          colors.ink,
-          colors.ink,
-        ]}
-        locations={[0, 0.22, 0.45, 0.65, 1.0]}
-        style={[styles.gradient, { height: BAR_HEIGHT + insets.bottom + 24 }]}
-      />
-
+      {!coachMode && (
+        <LinearGradient
+          pointerEvents="none"
+          colors={[
+            'rgba(247,245,239,0.0)',
+            'rgba(247,245,239,0.70)',
+            'rgba(247,245,239,0.95)',
+            colors.ink,
+            colors.ink,
+          ]}
+          locations={[0, 0.22, 0.45, 0.65, 1.0]}
+          style={[styles.gradient, { height: BAR_HEIGHT + insets.bottom + 24 }]}
+        />
+      )}
 
       <View style={[styles.row, { height: BAR_HEIGHT }]}>
         {LEFT_TABS.map((tab) => (
@@ -86,6 +92,7 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             key={tab.routeName}
             tab={tab}
             isActive={activeRoute === tab.routeName}
+            coachMode={coachMode}
             onPress={() => navigateTo(tab.routeName)}
           />
         ))}
@@ -100,6 +107,7 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
             key={tab.routeName}
             tab={tab}
             isActive={activeRoute === tab.routeName}
+            coachMode={coachMode}
             onPress={() => navigateTo(tab.routeName)}
           />
         ))}
@@ -111,19 +119,30 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 function TabButton({
   tab,
   isActive,
+  coachMode,
   onPress,
 }: {
   tab: TabConfig;
   isActive: boolean;
+  coachMode: boolean;
   onPress: () => void;
 }) {
-  const color = isActive ? colors.paper : colors.paper3;
+  const color = coachMode
+    ? isActive
+      ? '#FFFFFF'
+      : 'rgba(255,255,255,0.72)'
+    : isActive
+      ? colors.paper
+      : colors.paper3;
 
   function renderIcon() {
     if (tab.renderIcon) {
-      return tab.renderIcon(color, 22, isActive);
+      // Thick stroke on Coach (bold white); active elsewhere is medium.
+      return tab.renderIcon(color, 22, isActive, coachMode);
     }
-    const iconName: keyof typeof Ionicons.glyphMap = isActive
+    // On Coach use the solid (filled) glyph so it reads as a bold white icon.
+    const solid = isActive || coachMode;
+    const iconName: keyof typeof Ionicons.glyphMap = solid
       ? (String(tab.icon).replace('-outline', '') as keyof typeof Ionicons.glyphMap)
       : (tab.icon as keyof typeof Ionicons.glyphMap);
     return <Ionicons name={iconName} size={24} color={color} />;
@@ -132,7 +151,7 @@ function TabButton({
   return (
     <TouchableOpacity style={styles.tabButton} onPress={onPress} activeOpacity={0.7}>
       {renderIcon()}
-      <Text style={[styles.label, { color, opacity: isActive ? 1 : 0.7 }]}>
+      <Text style={[styles.label, { color, opacity: isActive ? 1 : coachMode ? 0.85 : 0.7 }]}>
         {tab.label.toUpperCase()}
       </Text>
     </TouchableOpacity>
@@ -212,7 +231,5 @@ const styles = StyleSheet.create({
     borderRadius: 29,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 6,
-    borderColor: colors.ink,
   },
 });

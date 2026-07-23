@@ -19,7 +19,7 @@ export default function BookItPill({ fullWidth = false }: Props) {
 
 const styles = StyleSheet.create({
   pill: {
-    backgroundColor: colors.blue, // = iOS lpRust (#0088FF)
+    backgroundColor: colors.blue, // = iOS lpRust (#3F79BA)
     borderRadius: 999,
     paddingVertical: 7,
     alignItems: 'center',

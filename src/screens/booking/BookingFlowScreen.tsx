@@ -12,7 +12,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import * as WebBrowser from 'expo-web-browser';
-import { colors } from '../../theme';
+import { colors, fonts } from '../../theme';
 import { useVenueById, useActivities } from '../../supabase/hooks/useVenues';
 import {
   fetchAvailableSlots,
@@ -892,7 +892,7 @@ const styles = StyleSheet.create({
 
 const stepStyles = StyleSheet.create({
   container: { flex: 1, padding: 20, gap: 16 },
-  heading: { fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
+  heading: { fontFamily: fonts.serif, fontSize: 22, fontWeight: '400', color: colors.paper, letterSpacing: -0.4 },
   footer: { paddingVertical: 8 },
 });
 
@@ -1047,7 +1047,7 @@ const successStyles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
+  title: { fontFamily: fonts.serif, fontSize: 28, fontWeight: '400', color: colors.paper, letterSpacing: -0.6 },
   subtitle: { fontSize: 15, color: colors.paper2, textAlign: 'center' },
   button: { alignSelf: 'stretch', marginTop: 24 },
 });

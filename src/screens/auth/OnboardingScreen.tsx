@@ -10,7 +10,9 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { colors } from '../../theme';
+import { fonts } from '../../theme';
+// Onboarding is full-bleed dark imagery, so its text/chrome stays light.
+import { onImage as colors } from '../../theme/onImage';
 import { useAuthStore } from '../../stores/authStore';
 import Kicker from '../../components/Kicker';
 import PrimaryButton from '../../components/PrimaryButton';
@@ -226,13 +228,14 @@ const styles = StyleSheet.create({
 
 const splashStyles = StyleSheet.create({
   headline: {
+    fontFamily: fonts.serif,
     fontSize: 44,
     fontWeight: '400',
     color: colors.paper,
     letterSpacing: -1.6,
     lineHeight: 52,
   },
-  italic: { fontStyle: 'italic' },
+  italic: { fontFamily: fonts.serifItalic, fontStyle: 'italic' },
   body: {
     fontSize: 15,
     color: colors.paper2,
@@ -278,6 +281,7 @@ const slideStyles = StyleSheet.create({
     gap: 16,
   },
   title: {
+    fontFamily: fonts.serif,
     fontSize: 40,
     fontWeight: '400',
     color: colors.paper,

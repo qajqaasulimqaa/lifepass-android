@@ -31,7 +31,7 @@ export default function ProfileCreditCard() {
     <View style={s.glowShell}>
       {/* Gradient border — 1.5px inset */}
       <LinearGradient
-        colors={['rgba(0,136,255,0.85)', 'rgba(168,216,240,0.55)', 'rgba(58,161,255,0.3)']}
+        colors={['rgba(63,121,186,0.85)', 'rgba(168,216,240,0.55)', 'rgba(98,149,206,0.3)']}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={s.gradientBorder}
@@ -113,7 +113,7 @@ const s = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: colors.moss,
+    backgroundColor: colors.blue,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,

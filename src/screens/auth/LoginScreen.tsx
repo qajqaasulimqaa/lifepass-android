@@ -60,7 +60,7 @@ export default function LoginScreen({ navigation }: AuthStackScreenProps<'Login'
   return (
     <View style={styles.container}>
       <LinearGradient
-        colors={['rgba(0,136,255,0.25)', 'transparent']}
+        colors={['rgba(63,121,186,0.25)', 'transparent']}
         start={{ x: 0.5, y: 0.0 }}
         end={{ x: 0.5, y: 0.4 }}
         style={StyleSheet.absoluteFill}

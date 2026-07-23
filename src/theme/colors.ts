@@ -1,28 +1,29 @@
 export const colors = {
-  // Surfaces
-  ink:   '#0F172A',  // page base
-  ink2:  '#142139',  // cards, sheets
-  ink3:  '#0A1F3D',  // navy elevated
-  ink4:  '#162952',  // inner surfaces, chips
+  // Surfaces — warm paper, editorial (light theme).
+  // Token names are kept from the previous dark theme so the whole app
+  // re-themes from this one file; `ink*` are page/surface fills, `paper*` is text.
+  ink:   '#F7F5EF',  // page base — warm off-white
+  ink2:  '#F0EDE3',  // cards, sheets — slightly recessed
+  ink3:  '#EAE6D9',  // elevated surfaces
+  ink4:  '#E3DECF',  // inner surfaces, chips
 
-  // Borders
-  line:  'rgba(230,242,255,0.08)',   // hairline
-  line2: 'rgba(230,242,255,0.14)',   // stronger
+  // Borders — dark hairlines on paper
+  line:  'rgba(15,23,42,0.08)',   // hairline
+  line2: 'rgba(15,23,42,0.14)',   // stronger
 
-  // Text
-  paper:  '#F1F5F9',
-  paper2: 'rgba(241,245,249,0.72)',
-  paper3: 'rgba(241,245,249,0.48)',
-  paper4: 'rgba(241,245,249,0.28)',
+  // Text — deep ink
+  paper:  '#0F172A',
+  paper2: 'rgba(15,23,42,0.72)',
+  paper3: 'rgba(15,23,42,0.52)',
+  paper4: 'rgba(15,23,42,0.32)',
 
   // Accents
-  blue:        '#0088FF',
-  blueMid:     '#3AA1FF',
-  blueWash:    'rgba(0,136,255,0.18)',
-  skyBlue:     '#A8D8F0',  // signal / luxury accents
-  moss:        '#5EB3A5',  // success
-  destructive: '#D36363',  // error / warning
+  blue:        '#3F79BA',
+  blueMid:     '#6295CE',
+  blueWash:    'rgba(63,121,186,0.12)',
+  skyBlue:     '#2F6DA3',  // signal / luxury accents — deep glacier, reads on paper
+  moss:        '#3E8F7C',  // success
+  destructive: '#C2464B',  // error / warning
 
-  
+
 } as const;
-

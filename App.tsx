@@ -5,6 +5,25 @@ import { Linking } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import {
+  InterTight_400Regular,
+  InterTight_500Medium,
+  InterTight_600SemiBold,
+  InterTight_700Bold,
+  InterTight_400Regular_Italic,
+  InterTight_500Medium_Italic,
+  InterTight_600SemiBold_Italic,
+  InterTight_700Bold_Italic,
+} from '@expo-google-fonts/inter-tight';
+import {
+  Fraunces_400Regular,
+  Fraunces_500Medium,
+  Fraunces_600SemiBold,
+  Fraunces_700Bold,
+  Fraunces_400Regular_Italic,
+  Fraunces_500Medium_Italic,
+} from '@expo-google-fonts/fraunces';
 import RootNavigator from './src/navigation/RootNavigator';
 import { navigationRef, routeToCheckIn } from './src/navigation/navigationRef';
 import { requestNotificationPermission } from './src/services/notifications';
@@ -12,6 +31,23 @@ import { completeAuthFromUrl } from './src/supabase/services/auth';
 import { venueIdFromScan } from './src/checkin/walkInQrParser';
 
 export default function App() {
+  const [fontsLoaded] = useFonts({
+    InterTight_400Regular,
+    InterTight_500Medium,
+    InterTight_600SemiBold,
+    InterTight_700Bold,
+    InterTight_400Regular_Italic,
+    InterTight_500Medium_Italic,
+    InterTight_600SemiBold_Italic,
+    InterTight_700Bold_Italic,
+    Fraunces_400Regular,
+    Fraunces_500Medium,
+    Fraunces_600SemiBold,
+    Fraunces_700Bold,
+    Fraunces_400Regular_Italic,
+    Fraunces_500Medium_Italic,
+  });
+
   // A venue-QR App Link that arrives before the navigator is mounted (cold
   // start) is parked here and flushed from NavigationContainer's onReady.
   const pendingScanVenueId = useRef<string | null>(null);
@@ -44,6 +80,10 @@ export default function App() {
     return () => sub.remove();
   }, []);
 
+  // Hold the first frame until the custom fonts are ready so text doesn't
+  // flash in the system face and reflow. The native splash covers this gap.
+  if (!fontsLoaded) return null;
+
   return (
     <SafeAreaProvider>
       <NavigationContainer
@@ -56,7 +96,7 @@ export default function App() {
           }
         }}
       >
-        <StatusBar style="light" />
+        <StatusBar style="dark" />
         <RootNavigator />
       </NavigationContainer>
     </SafeAreaProvider>
