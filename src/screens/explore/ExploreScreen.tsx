@@ -623,7 +623,7 @@ function EditorialBanner() {
   return (
     <View style={bannerStyles.container}>
       <Video
-        source={require('../../../assets/hero-video-compressed.mp4')}
+        source={require('../../../assets/lp-video-search-page.mp4')}
         style={StyleSheet.absoluteFill}
         resizeMode={ResizeMode.COVER}
         shouldPlay
