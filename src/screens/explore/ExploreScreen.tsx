@@ -95,7 +95,7 @@ export default function ExploreScreen() {
   const [wellnessOpen, setWellnessOpen] = useState(false);
   const [sportsOpen, setSportsOpen] = useState(false);
   const [pilatesYogaOpen, setPilatesYogaOpen] = useState(false);
-  const [presentation, setPresentation] = useState<Presentation>('list');
+  const [presentation, setPresentation] = useState<Presentation>('map');
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   function openVenue(venueId: string) {
@@ -163,10 +163,10 @@ export default function ExploreScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Search + toggle */}
+      {/* Search + map + filters — all in one row */}
       <View style={styles.searchRow}>
         <View style={styles.searchField}>
-          <Text style={styles.searchIcon}>🔍</Text>
+          <Ionicons name="search-outline" size={16} color={colors.paper3} />
           <TextInput
             style={styles.searchInput}
             placeholder="Search venues..."
@@ -175,6 +175,7 @@ export default function ExploreScreen() {
             onChangeText={setSearch}
           />
         </View>
+
         <TouchableOpacity
           style={styles.toggleButton}
           onPress={() => setPresentation(presentation === 'map' ? 'list' : 'map')}
@@ -185,10 +186,8 @@ export default function ExploreScreen() {
             color={colors.paper}
           />
         </TouchableOpacity>
-      </View>
 
-      {/* Filters toggle — collapses the plan + category rows (iOS parity) */}
-      <View style={styles.filterBar}>
+        {/* Filters — toggles the plan + category rows (iOS parity) */}
         <TouchableOpacity
           style={[styles.filterButton, (showFilters || activeFilterCount > 0) && styles.filterButtonActive]}
           onPress={() => setShowFilters((s) => !s)}
@@ -196,7 +195,7 @@ export default function ExploreScreen() {
         >
           <Ionicons
             name="options-outline"
-            size={13}
+            size={15}
             color={showFilters || activeFilterCount > 0 ? colors.ink : colors.paper2}
           />
           <Text
@@ -212,19 +211,16 @@ export default function ExploreScreen() {
               <Text style={styles.filterBadgeText}>{activeFilterCount}</Text>
             </View>
           )}
-          <Ionicons
-            name={showFilters ? 'chevron-up' : 'chevron-down'}
-            size={11}
-            color={showFilters || activeFilterCount > 0 ? colors.ink : colors.paper2}
-          />
         </TouchableOpacity>
-
-        {activeFilterCount > 0 && (
-          <TouchableOpacity onPress={clearFilters} activeOpacity={0.7}>
-            <Text style={styles.clearText}>Clear</Text>
-          </TouchableOpacity>
-        )}
       </View>
+
+      {activeFilterCount > 0 && (
+        <View style={styles.clearRow}>
+          <TouchableOpacity onPress={clearFilters} activeOpacity={0.7}>
+            <Text style={styles.clearText}>Clear filters</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {showFilters && (
         <>
@@ -682,14 +678,14 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink,
   },
   topBarCenter: { alignItems: 'center', gap: 2 },
-  searchRow: { flexDirection: 'row', gap: 10, paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8 },
-  filterBar: {
+  searchRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 20, paddingTop: 2, paddingBottom: 8,
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 8,
   },
+  clearRow: { alignItems: 'flex-end', paddingHorizontal: 20, paddingBottom: 8 },
   filterButton: {
     flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 14, paddingVertical: 8,
+    height: 44, paddingHorizontal: 14,
     backgroundColor: colors.ink2, borderRadius: 999,
     borderWidth: 1, borderColor: colors.line,
   },
@@ -708,7 +704,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.ink2, borderRadius: 12,
     borderWidth: 0.5, borderColor: colors.line,
   },
-  searchIcon: { fontSize: 13 },
   searchInput: { flex: 1, fontSize: 14, color: colors.paper },
   toggleButton: {
     width: 44, height: 44, alignItems: 'center', justifyContent: 'center',
