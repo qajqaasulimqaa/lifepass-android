@@ -1,14 +1,16 @@
-import { View, Text, Image, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '../theme';
 import BookItPill from './BookItPill';
-import PricePill from './PricePill';
 import type { Venue } from '../types/venue';
 
 type Props = {
   venue: Venue;
+  isFavourited: boolean;
+  onToggleFavourite: () => void;
 };
 
-export default function CuratedVenueRow({ venue }: Props) {
+export default function CuratedVenueRow({ venue, isFavourited, onToggleFavourite }: Props) {
   return (
     <View style={styles.row}>
       <Image source={{ uri: venue.imageUrl }} style={styles.image} />
@@ -25,9 +27,19 @@ export default function CuratedVenueRow({ venue }: Props) {
           </View>
         )}
       </View>
-      {/* Price marker + CTA, trailing-aligned like the iOS row */}
+      {/* Favourite heart + Book it CTA, trailing-aligned */}
       <View style={styles.right}>
-        <PricePill venue={venue} compact />
+        <TouchableOpacity
+          onPress={onToggleFavourite}
+          activeOpacity={0.7}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons
+            name={isFavourited ? 'heart' : 'heart-outline'}
+            size={20}
+            color={isFavourited ? colors.blue : colors.paper3}
+          />
+        </TouchableOpacity>
         <BookItPill />
       </View>
     </View>
