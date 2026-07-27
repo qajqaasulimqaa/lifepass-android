@@ -28,6 +28,7 @@ import Kicker from '../../components/Kicker';
 import Wordmark from '../../components/Wordmark';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
 import CuratedVenueRow from '../../components/CuratedVenueRow';
+import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
 import { coachCategories, type CoachCategory } from '../../data/coachCategories';
 import type { HomeStackParamList, TabParamList } from '../../navigation/types';
 
@@ -74,6 +75,7 @@ export default function HomeScreen() {
   const { venues, loading } = useVenues();
   const { bookings: upcomingBookings } = useBookings(true);
   const { weather } = useWeather();
+  const { savedVenueIds, toggle: toggleFavourite } = useFavouriteVenues();
   const userCoords = useLocation();
 
   const greeting = getGreeting();
@@ -294,7 +296,11 @@ export default function HomeScreen() {
               <View style={styles.curatedList}>
                 {curated.map((venue) => (
                   <TouchableOpacity key={venue.id} activeOpacity={0.85} onPress={() => openVenue(venue.id)}>
-                    <CuratedVenueRow venue={venue} />
+                    <CuratedVenueRow
+                      venue={venue}
+                      isFavourited={savedVenueIds.includes(venue.id)}
+                      onToggleFavourite={() => toggleFavourite(venue.id)}
+                    />
                   </TouchableOpacity>
                 ))}
               </View>
