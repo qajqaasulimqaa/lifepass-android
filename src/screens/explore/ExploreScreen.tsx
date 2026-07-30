@@ -11,10 +11,10 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import MapView, { Marker } from '../../components/MapView';
+import VenueMap from '../../components/VenueMap';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import { Video, ResizeMode } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { ExploreStackParamList } from '../../navigation/types';
@@ -49,36 +49,12 @@ const PLAN_FILTERS: { id: PlanFilter; label: string }[] = [
   { id: 'premium', label: 'Premium' },
 ];
 
-const REYKJAVIK = {
-  latitude: 64.1466,
-  longitude: -21.9426,
-  latitudeDelta: 0.08,
-  longitudeDelta: 0.08,
-};
-
-// Dark map style tuned to match the app's ink palette (#0F172A base)
-const DARK_MAP_STYLE = [
-  { elementType: 'geometry',            stylers: [{ color: '#0f172a' }] },
-  { elementType: 'labels.text.fill',    stylers: [{ color: '#6b7280' }] },
-  { elementType: 'labels.text.stroke',  stylers: [{ color: '#0f172a' }] },
-  { featureType: 'administrative',       elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#9ca3af' }] },
-  { featureType: 'administrative.locality', elementType: 'labels.text.fill', stylers: [{ color: '#d1d5db' }] },
-  { featureType: 'poi',                  elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-  { featureType: 'poi.park',             elementType: 'geometry', stylers: [{ color: '#1a2e1a' }] },
-  { featureType: 'poi.park',             elementType: 'labels.text.fill', stylers: [{ color: '#4b5563' }] },
-  { featureType: 'road',                 elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'road',                 elementType: 'geometry.stroke', stylers: [{ color: '#0f172a' }] },
-  { featureType: 'road',                 elementType: 'labels.text.fill', stylers: [{ color: '#64748b' }] },
-  { featureType: 'road.highway',         elementType: 'geometry', stylers: [{ color: '#253347' }] },
-  { featureType: 'road.highway',         elementType: 'geometry.stroke', stylers: [{ color: '#1e2d3d' }] },
-  { featureType: 'road.highway',         elementType: 'labels.text.fill', stylers: [{ color: '#94a3b8' }] },
-  { featureType: 'transit',              elementType: 'geometry', stylers: [{ color: '#1e293b' }] },
-  { featureType: 'transit.station',      elementType: 'labels.text.fill', stylers: [{ color: '#6b7280' }] },
-  { featureType: 'water',                elementType: 'geometry', stylers: [{ color: '#0c1a2e' }] },
-  { featureType: 'water',                elementType: 'labels.text.fill', stylers: [{ color: '#374151' }] },
-  { featureType: 'water',                elementType: 'labels.text.stroke', stylers: [{ color: '#0c1a2e' }] },
-];
+// The venue map is Mapbox (@rnmapbox/maps), rendered by components/VenueMap. It
+// needs a public token at runtime (EXPO_PUBLIC_MAPBOX_TOKEN) and a download token
+// at build time (MAPBOX_DOWNLOAD_TOKEN, see app.config.js). Mapbox on Android
+// degrades to a blank map if the runtime token is missing rather than crashing,
+// so this is safe to leave on. Set to false to hide the map toggle entirely.
+const MAPS_ENABLED = true;
 
 export default function ExploreScreen() {
   const insets = useSafeAreaInsets();
@@ -95,7 +71,7 @@ export default function ExploreScreen() {
   const [wellnessOpen, setWellnessOpen] = useState(false);
   const [sportsOpen, setSportsOpen] = useState(false);
   const [pilatesYogaOpen, setPilatesYogaOpen] = useState(false);
-  const [presentation, setPresentation] = useState<Presentation>('map');
+  const [presentation, setPresentation] = useState<Presentation>('list');
   const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
 
   function openVenue(venueId: string) {
@@ -176,16 +152,18 @@ export default function ExploreScreen() {
           />
         </View>
 
-        <TouchableOpacity
-          style={styles.toggleButton}
-          onPress={() => setPresentation(presentation === 'map' ? 'list' : 'map')}
-        >
-          <Ionicons
-            name={presentation === 'map' ? 'list-outline' : 'map-outline'}
-            size={20}
-            color={colors.paper}
-          />
-        </TouchableOpacity>
+        {MAPS_ENABLED && (
+          <TouchableOpacity
+            style={styles.toggleButton}
+            onPress={() => setPresentation(presentation === 'map' ? 'list' : 'map')}
+          >
+            <Ionicons
+              name={presentation === 'map' ? 'list-outline' : 'map-outline'}
+              size={20}
+              color={colors.paper}
+            />
+          </TouchableOpacity>
+        )}
 
         {/* Filters — toggles the plan + category rows (iOS parity) */}
         <TouchableOpacity
@@ -493,33 +471,16 @@ export default function ExploreScreen() {
     </>
   );
 
-  if (presentation === 'map') {
+  if (MAPS_ENABLED && presentation === 'map') {
     // Full-screen map — tiles bleed edge to edge behind the status bar.
     // The filter overlay sits on top and pushes its own content below the notch.
     return (
       <View style={styles.mapFull}>
-        <MapView
-          style={StyleSheet.absoluteFill}
-          initialRegion={REYKJAVIK}
-          customMapStyle={DARK_MAP_STYLE}
-          userInterfaceStyle="dark"
-        >
-          {filtered
-            .filter((v) => v.latitude != null && v.longitude != null)
-            .map((venue) => (
-              <Marker
-                key={venue.id}
-                coordinate={{ latitude: venue.latitude, longitude: venue.longitude }}
-                onPress={() => setSelectedVenueId(venue.id)}
-                tracksViewChanges={false}
-              >
-                <VenueMapMarker
-                  imageUrl={venue.imageUrl}
-                  isSelected={selectedVenueId === venue.id}
-                />
-              </Marker>
-            ))}
-        </MapView>
+        <VenueMap
+          venues={filtered}
+          selectedVenueId={selectedVenueId}
+          onSelect={setSelectedVenueId}
+        />
 
         {/* Filter panel floats over the map, padded below the notch */}
         <View style={[styles.mapOverlay, { paddingTop: insets.top }]}>
@@ -578,54 +539,22 @@ export default function ExploreScreen() {
   );
 }
 
-// ─── Circular venue photo marker (mirrors iOS VenueMapMarker) ────────────────
-
-function VenueMapMarker({ imageUrl, isSelected }: { imageUrl: string; isSelected: boolean }) {
-  const outerSize = isSelected ? 48 : 40;
-  const innerSize = isSelected ? 42 : 34;
-  return (
-    <View
-      style={[
-        markerStyles.outer,
-        {
-          width: outerSize,
-          height: outerSize,
-          borderRadius: outerSize / 2,
-          backgroundColor: isSelected ? colors.blue : colors.paper,
-        },
-      ]}
-    >
-      <Image
-        source={{ uri: imageUrl }}
-        style={{ width: innerSize, height: innerSize, borderRadius: innerSize / 2 }}
-      />
-    </View>
-  );
-}
-
-const markerStyles = StyleSheet.create({
-  outer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
-    elevation: 6,
-  },
-});
-
 function EditorialBanner() {
+  const player = useVideoPlayer(
+    require('../../../assets/lp-video-search-page.mp4'),
+    (p) => {
+      p.loop = true;
+      p.muted = true;
+      p.play();
+    }
+  );
   return (
     <View style={bannerStyles.container}>
-      <Video
-        source={require('../../../assets/lp-video-search-page.mp4')}
+      <VideoView
+        player={player}
         style={StyleSheet.absoluteFill}
-        resizeMode={ResizeMode.COVER}
-        shouldPlay
-        isLooping
-        isMuted
-        useNativeControls={false}
+        contentFit="cover"
+        nativeControls={false}
       />
       <LinearGradient
         colors={['rgba(15,23,42,0.05)', 'rgba(15,23,42,0.85)']}
