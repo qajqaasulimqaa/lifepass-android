@@ -33,8 +33,12 @@ export type CheckoutSession = { url: string; externalSessionId?: string };
  */
 export async function createCheckout(
   productSlug: string,
-  opts?: { saveCard?: boolean },
+  opts?: { saveCard?: boolean; promotionCode?: string },
 ): Promise<CheckoutSession> {
+  // Partner promo codes (e.g. Saman "FRIMANNPASS") ride MEMBERSHIP checkout
+  // only; the server applies them to subscriptions and ignores them for passes.
+  // The caller passes it for subscriptions only (mirrors iOS PlansViewModel).
+  const promotionCode = opts?.promotionCode?.trim();
   const res = await apiPost<CheckoutSessionResponse>(
     '/payments/checkout-sessions',
     {
@@ -42,6 +46,7 @@ export async function createCheckout(
       successUrl: PAYMENT_SUCCESS_URL,
       cancelUrl: PAYMENT_CANCEL_URL,
       ...(opts?.saveCard !== undefined ? { saveCard: opts.saveCard } : {}),
+      ...(promotionCode ? { promotionCode } : {}),
       terms: {
         acceptedAt: new Date().toISOString(),
         privacyVersion: PRIVACY_VERSION,
@@ -80,12 +85,14 @@ export async function confirmCheckout(externalSessionId: string): Promise<boolea
 
 /**
  * GET /payments/status → poll until fulfilment completes. The server emits
- * `pending` or `fulfilled`; returns true once `fulfilled`.
+ * `pending` or `fulfilled`; returns true once `fulfilled`. `plan` scopes the
+ * lookup to the purchased slug (mirrors iOS `pollPaymentStatus(plan:)`) so the
+ * status endpoint resolves the right product — it matters most for `pass-*`.
  */
-export async function pollPaymentStatus(maxAttempts = 10): Promise<boolean> {
+export async function pollPaymentStatus(plan?: string, maxAttempts = 12): Promise<boolean> {
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     try {
-      const { status } = await apiGet<{ status: string }>('/payments/status');
+      const { status } = await apiGet<{ status: string }>('/payments/status', { plan });
       if (status === 'fulfilled') return true;
     } catch {
       // transient — keep polling
@@ -107,10 +114,10 @@ export type CheckoutOutcome = 'fulfilled' | 'pending' | 'canceled';
  */
 export async function startCheckout(
   productSlug: string,
-  opts?: { saveCard?: boolean },
+  opts?: { saveCard?: boolean; promotionCode?: string },
 ): Promise<CheckoutOutcome> {
   const { url, externalSessionId } = await createCheckout(productSlug, opts);
-  return settleHostedCheckout(url, externalSessionId);
+  return settleHostedCheckout(url, externalSessionId, productSlug);
 }
 
 /**
@@ -121,6 +128,7 @@ export async function startCheckout(
 export async function settleHostedCheckout(
   url: string,
   externalSessionId?: string,
+  plan?: string,
 ): Promise<CheckoutOutcome> {
   const result = await WebBrowser.openAuthSessionAsync(url, PAYMENT_SUCCESS_URL);
   if (result.type !== 'success' || !result.url) return 'canceled';
@@ -129,6 +137,6 @@ export async function settleHostedCheckout(
   // Returned via the success deep link. Trigger the server-side verified pull,
   // then fall back to status polling until fulfilment lands.
   let fulfilled = externalSessionId ? await confirmCheckout(externalSessionId) : false;
-  if (!fulfilled) fulfilled = await pollPaymentStatus();
+  if (!fulfilled) fulfilled = await pollPaymentStatus(plan);
   return fulfilled ? 'fulfilled' : 'pending';
 }

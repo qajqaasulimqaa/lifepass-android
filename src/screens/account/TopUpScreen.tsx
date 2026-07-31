@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  TextInput,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useBottomTabBarHeight } from '@react-navigation/bottom-tabs';
@@ -16,6 +17,9 @@ import Kicker from '../../components/Kicker';
 import PrimaryButton from '../../components/PrimaryButton';
 import KenniVerificationModal from '../../components/KenniVerificationModal';
 import { startCheckout } from '../../supabase/services/payments';
+import { usePlanCatalog } from '../../supabase/hooks/usePlanCatalog';
+import { priceIskForSlug } from '../../supabase/services/catalog';
+import { iskPrefix } from '../../types/venue';
 
 // ─── Plan data (mirrors iOS Plan.swift — v1 product catalogue) ────────────────
 //
@@ -138,6 +142,8 @@ export default function TopUpScreen() {
   const [selectedId, setSelectedId] = useState<string>('plan-plus');
   const [checkingOut, setCheckingOut] = useState(false);
   const [kenniOpen, setKenniOpen] = useState(false);
+  const [promoCode, setPromoCode] = useState('');
+  const catalog = usePlanCatalog();
 
   const plans = tab === 0 ? SUBSCRIPTION_PLANS : VISITOR_PASSES;
   const selectedPlan = plans.find((p) => p.id === selectedId) ?? plans[0];
@@ -166,8 +172,13 @@ export default function TopUpScreen() {
     if (checkingOut) return;
     setCheckingOut(true);
     try {
+      // Partner promo codes apply to subscriptions only (the server ignores
+      // them for passes) — mirrors iOS PlansView.
+      const trimmedPromo = promoCode.trim();
+      const opts =
+        selectedPlan.isSubscription && trimmedPromo ? { promotionCode: trimmedPromo } : undefined;
       // Opens Kling's hosted checkout in a Custom Tab; resolves on return.
-      const outcome = await startCheckout(selectedPlan.id);
+      const outcome = await startCheckout(selectedPlan.id, opts);
       const noun = selectedPlan.isSubscription ? 'plan' : 'pass';
       if (outcome === 'fulfilled') {
         Alert.alert("You're all set", `Your ${selectedPlan.name} ${noun} is now active.`, [
@@ -236,11 +247,29 @@ export default function TopUpScreen() {
             <PlanCard
               key={plan.id}
               plan={plan}
+              price={catalog ? priceIskForSlug(catalog, plan.id) : null}
               selected={selectedId === plan.id}
               onPress={() => setSelectedId(plan.id)}
             />
           ))}
         </View>
+
+        {/* Partner promo code — subscriptions only (mirrors iOS PlansView) */}
+        {tab === 0 && (
+          <View style={styles.promoWrap}>
+            <Text style={styles.promoLabel}>Partner code</Text>
+            <TextInput
+              style={styles.promoInput}
+              placeholder="Enter a promo code (optional)"
+              placeholderTextColor={colors.paper4}
+              value={promoCode}
+              onChangeText={setPromoCode}
+              autoCapitalize="characters"
+              autoCorrect={false}
+              returnKeyType="done"
+            />
+          </View>
+        )}
 
         {/* Fine print dots */}
         <View style={styles.finePrintRow}>
@@ -322,10 +351,12 @@ const segStyles = StyleSheet.create({
 
 function PlanCard({
   plan,
+  price,
   selected,
   onPress,
 }: {
   plan: Plan;
+  price: number | null;
   selected: boolean;
   onPress: () => void;
 }) {
@@ -346,7 +377,7 @@ function PlanCard({
         </View>
       )}
 
-      {/* Top row: name + subtitle */}
+      {/* Top row: name + subtitle + price */}
       <View style={cardStyles.topRow}>
         <View style={cardStyles.nameBlock}>
           <Text style={cardStyles.letter}>{plan.name}</Text>
@@ -354,6 +385,12 @@ function PlanCard({
             {plan.subtitle}
           </Text>
         </View>
+        {price != null && (
+          <View style={cardStyles.priceBlock}>
+            <Text style={cardStyles.price}>{iskPrefix(price)}</Text>
+            {plan.isSubscription && <Text style={cardStyles.pricePer}>per month</Text>}
+          </View>
+        )}
       </View>
 
       {/* Features */}
@@ -417,6 +454,9 @@ const cardStyles = StyleSheet.create({
     lineHeight: 38,
   },
   subtitle: { fontSize: 13, color: colors.paper3 },
+  priceBlock: { alignItems: 'flex-end', marginLeft: 8 },
+  price: { fontSize: 16, fontWeight: '700', color: colors.paper, letterSpacing: -0.3 },
+  pricePer: { fontSize: 10.5, color: colors.paper3, marginTop: 1 },
   features: { gap: 6 },
   featureRow: {
     flexDirection: 'row',
@@ -502,6 +542,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 16,
     paddingHorizontal: 8,
+  },
+
+  promoWrap: { gap: 8 },
+  promoLabel: { fontSize: 12, fontWeight: '600', color: colors.paper3, letterSpacing: 0.2 },
+  promoInput: {
+    height: 44,
+    paddingHorizontal: 14,
+    backgroundColor: colors.ink2,
+    borderRadius: 12,
+    borderWidth: 0.5,
+    borderColor: colors.line,
+    color: colors.paper,
+    fontSize: 14,
   },
 
   cta: { position: 'absolute', right: 20 },
