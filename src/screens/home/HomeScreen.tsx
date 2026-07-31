@@ -29,6 +29,8 @@ import Wordmark from '../../components/Wordmark';
 import NearbyVenueCard from '../../components/NearbyVenueCard';
 import CuratedVenueRow from '../../components/CuratedVenueRow';
 import { useFavouriteVenues } from '../../supabase/hooks/useFavourites';
+import { useRecentCheckIn } from '../../supabase/hooks/useRecentCheckIn';
+import CheckInProofBanner from '../../components/CheckInProofBanner';
 import { coachCategories, type CoachCategory } from '../../data/coachCategories';
 import type { HomeStackParamList, TabParamList } from '../../navigation/types';
 
@@ -76,6 +78,9 @@ export default function HomeScreen() {
   const { bookings: upcomingBookings } = useBookings(true);
   const { weather } = useWeather();
   const { savedVenueIds, toggle: toggleFavourite } = useFavouriteVenues();
+  // Recent check-in → the "you're checked in" staff-proof banner (fail-soft;
+  // dormant until the API sends `recentCheckIn`). Mirrors lifepass-ios Home.
+  const recentCheckIn = useRecentCheckIn();
   const userCoords = useLocation();
 
   const greeting = getGreeting();
@@ -154,6 +159,10 @@ export default function HomeScreen() {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
+      {/* Fresh check-in: the member may be at a front desk right now, so the
+          staff proof outranks the hero and takes the top slot. */}
+      {recentCheckIn && <CheckInProofBanner checkIn={recentCheckIn} />}
+
       {/* Hero */}
       <View style={styles.heroContainer}>
         {hero ? (
