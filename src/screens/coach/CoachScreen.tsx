@@ -149,13 +149,17 @@ export default function CoachScreen() {
     const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
     const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
     const show = Keyboard.addListener(showEvent, (e) => {
-      // Android edge-to-edge under-reports endCoordinates.height (it can miss
-      // the nav-bar strip the window draws behind), leaving the input partially
-      // hidden. The keyboard's top edge (screenY) vs the window height gives
-      // the true coverage — take whichever is larger.
+      // Android edge-to-edge under-reports endCoordinates.height (it misses the
+      // nav-bar strip the window draws behind), leaving the input hidden on some
+      // OEM skins (OnePlus/OxygenOS). The input bar is anchored inside the
+      // full-bleed edge-to-edge container, so coverage must be measured against
+      // the PHYSICAL screen height — some OEMs shrink window.height by the
+      // nav-bar area, which pushed the bar too low. screenY is the keyboard's
+      // top edge in screen coords; on phones where window == screen (e.g. many
+      // Samsung One UI builds) this is identical to before, so no regression.
       const { height = 0, screenY } = e.endCoordinates ?? {};
-      const winH = Dimensions.get('window').height;
-      const coverage = screenY != null ? Math.max(height, winH - screenY) : height;
+      const screenH = Dimensions.get('screen').height;
+      const coverage = screenY != null ? Math.max(height, screenH - screenY) : height;
       setKeyboardHeight(coverage);
     });
     const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
