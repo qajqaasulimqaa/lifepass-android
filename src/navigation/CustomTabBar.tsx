@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import { StackActions, type NavigationState } from '@react-navigation/native';
 import { colors } from '../theme';
 import WaveIcon from '../components/WaveIcon';
 import ProfileIcon from '../components/ProfileIcon';
@@ -62,8 +63,31 @@ export default function CustomTabBar({ state, navigation }: BottomTabBarProps) {
 
   if (HIDDEN_ON_ROUTES.includes(focusedChildRoute(state) ?? '')) return null;
 
+  // Pressing a tab navigates to it. Pressing the tab you're ALREADY on pops that
+  // tab's stack back to its root — e.g. tap Explore while viewing a venue and you
+  // land back on the venue list (same for Home, Coach, Bookings, Check-in).
   function navigateTo(routeName: string) {
-    navigation.navigate(routeName);
+    const index = state.routes.findIndex((r) => r.name === routeName);
+    const route = state.routes[index];
+    if (!route) return;
+    const isFocused = state.index === index;
+
+    const event = navigation.emit({
+      type: 'tabPress',
+      target: route.key,
+      canPreventDefault: true,
+    });
+    if (event.defaultPrevented) return;
+
+    if (isFocused) {
+      // Already on this tab — reset its nested stack to the first screen.
+      const nested = route.state as NavigationState | undefined;
+      if (nested && nested.index > 0) {
+        navigation.dispatch({ ...StackActions.popToTop(), target: nested.key });
+      }
+    } else {
+      navigation.navigate(routeName);
+    }
   }
 
   return (
